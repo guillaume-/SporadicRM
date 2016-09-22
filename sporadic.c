@@ -25,9 +25,9 @@ typedef struct
 
 
 typedef struct sporadic_server{
-    char r0;
-    char Cs;
-    char Ps;
+    int r0;
+    int Cs;
+    int Ps;
 } Server;
 
 
