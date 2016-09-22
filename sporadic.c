@@ -12,24 +12,25 @@
 typedef struct
 {
     int charge; //temps d'exécution
-    int t; //date de début
+    int t; //date de début/période
     int num; //numéro de la tâche
-} a_tache;
-
-typedef struct
-{
-    int charge; //temps d'exécution
-    int t; //periode
-    int num; //numéro de la tache
-} p_tache;
+} a_tache, p_tache;
 
 
-typedef struct sporadic_server{
+typedef struct {
     int r0;
     int Cs;
     int Ps;
 } Server;
 
+struct params_serv
+{
+    a_tache **a;
+    p_tache **p;
+    int a_size;
+    int p_size;
+    Server *s;
+};
 
 void error(int type)
 {
@@ -46,8 +47,11 @@ void error(int type)
 }
 
 //lit le fichier de configuration et remplit les deux tableaux reçus en paramètre
-void read_conf(a_tache **taches_a, p_tache **taches_p)
+void read_conf(struct params_serv *params)
 {
+    a_tache **taches_a = params->a;
+    p_tache **taches_p = params->p;
+
     //on ouvre le fichier de config
     FILE *conf;
     conf = fopen(FICHIER_CONF, "r+");
@@ -126,6 +130,12 @@ void read_conf(a_tache **taches_a, p_tache **taches_p)
         }
     }
 
+    *taches_p = realloc(*taches_p, sizeof(p_tache) * num_taches_p);
+    *taches_a = realloc(*taches_a, sizeof(a_tache) * num_taches_a);
+
+    params->a_size = num_taches_a;
+    params->p_size = num_taches_p;
+
     fclose(conf);
 }
 
@@ -146,8 +156,28 @@ void usage(char * progname)
     exit(EXIT_FAILURE);
 }
 
+void cycle(struct params_serv *params)
+{
+    //on décide quelle tâche a la priorité
+    //de base on dit que c'est le serveur
+    int max_prio = params->s->Ps;
+
+    int i;
+    for(i = 0; i < params->a_size; i++)
+    {
+
+    }
+    for(i = 0; i < params->p_size; i++)
+    {
+
+    }
+
+}
+
 int main(int argc, char *argv[])
 {
+    struct params_serv params;
+
     Server srv;
     if(argc != 4)
     {
@@ -158,7 +188,10 @@ int main(int argc, char *argv[])
     a_tache *taches_aperiodiques;
     p_tache *taches_periodiques;
 
-    read_conf(&taches_aperiodiques, &taches_periodiques);
+    params.a = &taches_aperiodiques;
+    params.p = &taches_periodiques;
+
+    read_conf(&params);
 
     return 0;
 }
