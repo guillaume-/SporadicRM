@@ -4,9 +4,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
 typedef struct sporadic_server{
 	char r0;
+	char Cs;
 	char Ps;
 } Server;
 
@@ -20,7 +20,7 @@ void parseArgs(char *argv[], Server *srv)
 void usage(char * progname)
 {
 	printf("\
-usage : %s r0, Cs, Ps\n\
+usage : %s r0 Cs Ps\n\
 r0 = temps de démarrage\n\
 Cs = capacité maximale du serveur\n\
 Ps = période du serveur (= Ds deadline)\n", progname);
