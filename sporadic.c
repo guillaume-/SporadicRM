@@ -9,6 +9,8 @@
 
 #define CONF_ERROR 0
 
+#define NUM_SERVER_PRIO 0
+
 typedef struct
 {
     int charge; //temps d'exécution
@@ -29,6 +31,7 @@ struct params_serv
     p_tache **p;
     int a_size;
     int p_size;
+    int *a_rdy;
     Server *s;
 };
 
@@ -132,6 +135,8 @@ void read_conf(struct params_serv *params)
 
     *taches_p = realloc(*taches_p, sizeof(p_tache) * num_taches_p);
     *taches_a = realloc(*taches_a, sizeof(a_tache) * num_taches_a);
+    
+    params->a_rdy = calloc(num_taches_a, sizeof(int));
 
     params->a_size = num_taches_a;
     params->p_size = num_taches_p;
@@ -156,22 +161,66 @@ void usage(char * progname)
     exit(EXIT_FAILURE);
 }
 
-void cycle(struct params_serv *params)
+int available(p_tache *p)
 {
-    //on décide quelle tâche a la priorité
-    //de base on dit que c'est le serveur
-    int max_prio = params->s->Ps;
+	return 1;
+	return 0;
+}
 
+int get_tache_prio(struct params_serv *params)
+{
+	/*On parcourt la liste des tâches périodiques disponibles pour
+	 * trouver laquelle a la plus grande priorité
+	 */
     int i;
-    for(i = 0; i < params->a_size; i++)
-    {
-
-    }
+    p_tache *prio = NULL;
     for(i = 0; i < params->p_size; i++)
     {
-
+		//il faut bien sûr que la tâche n'ait pas encore été exécutée pendant cette période
+		if(available(params->p[i]))
+		{
+			//si on a pas encore trouvé de tâche disponible, alors on met celle qu'on vient de trouver
+			if(!prio)
+			{
+				prio = params->p[i];
+			}
+			else
+			//sinon on regarde si elle a une plus grande priorité que celle qu'on a actuellement
+			if(params->p[i]->t < prio->t)
+			{
+				prio = params->p[i];
+			}
+		}
     }
+    
+    //si on a trouvé une tâche disponible on la renvoie
+    if(prio)
+    {
+		return prio->num;
+	}
+	
+	return -1;
+}
 
+void cycle(struct params_serv *params)
+{
+	//on regarde si on a une tache périodique à lancer
+	int p_prio = get_tache_prio(params);
+
+	//si c'est le cas on vérifie que sa priorité est effectivement plus grande que celle du serveur
+	if(p_prio != -1)
+	{
+		// Si le serveur a la priorité et a une tâche à lancer il la lance
+		if((params->p[p_prio]->t > params->s->Ps) && params->a_rdy[0] > 0)
+		{
+			
+		}
+		//sinon on lance la tâche périodique
+		else
+		{
+			
+		}
+	}
 }
 
 int main(int argc, char *argv[])
