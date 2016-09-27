@@ -13,6 +13,7 @@
 
 typedef struct
 {
+	int curr_charge;
     int charge; //temps d'exécution
     int t; //date de début/période
     int num; //numéro de la tâche
@@ -106,6 +107,7 @@ void read_conf(struct params_serv *params)
             //on stocke les informations des variables provisoires dans le tableau
             (*taches_p)[num_taches_p].num = num - '0';
             (*taches_p)[num_taches_p].charge = atoi(charge);
+            (*taches_p)[num_taches_p].curr_charge = atoi(charge);
             (*taches_p)[num_taches_p].t = atoi(t);
 
             num_taches_p++;
@@ -123,6 +125,7 @@ void read_conf(struct params_serv *params)
 
             (*taches_a)[num_taches_a].num = num - '0';
             (*taches_a)[num_taches_a].charge = atoi(charge);
+            (*taches_a)[num_taches_a].curr_charge = atoi(charge);
             (*taches_a)[num_taches_a].t = atoi(t);
 
             num_taches_a++;
@@ -163,7 +166,10 @@ void usage(char * progname)
 
 int available(p_tache *p)
 {
-	return 1;
+	if(p->curr_charge > 0)
+	{
+		return 1;
+	}
 	return 0;
 }
 
