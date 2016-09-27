@@ -8,8 +8,9 @@
 #define FICHIER_CONF "conf_sporadic"
 
 #define CONF_ERROR 0
+#define EXEC_ERROR 1
 
-#define NUM_SERVER_PRIO 0
+#define NUM_CYCLES 30
 
 typedef struct
 {
@@ -33,6 +34,7 @@ struct params_serv
     int a_size;
     int p_size;
     int *a_rdy;
+    int curr_cycle;
     Server *s;
 };
 
@@ -42,6 +44,10 @@ void error(int type)
     {
         case CONF_ERROR :
         printf("Erreur dans le fichier de configuration");
+        break;
+        
+        case EXEC_ERROR :
+        printf("Une tâche n'a pas pû s'exécuter en entier durant sa période");
         break;
 
         default :
@@ -164,6 +170,7 @@ void usage(char * progname)
     exit(EXIT_FAILURE);
 }
 
+//une tâche périodique est disponible si elle a encore de la charge à exécuter
 int available(p_tache *p)
 {
 	if(p->curr_charge > 0)
@@ -208,8 +215,86 @@ int get_tache_prio(struct params_serv *params)
 	return -1;
 }
 
+void exec_p(struct params_serv *params, int tache)
+{
+	params->p[tache]->curr_charge--;
+}
+
+void exec_a(struct params_serv *params)
+{
+	int tache = params->a_rdy[0];
+	params->a[0]->curr_charge--;
+}
+
+void check_tasks(struct params_serv *params)
+{
+	int i;
+	
+	//on vérifie pour toutes les tâches périodiques si leur période recommence
+	//si c'est le cas on leur rend leur charge totale à exécuter
+	for(i = 0; i < params->p_size; i++)
+	{
+		//si le cycle courant est un multiple de la période de la tâche courante
+		//alors la tâche récupère sa charge courante
+		if(params->curr_cycle % params->p[i]->t == 0)
+		{
+			//on vérifie que la tâche a bien eu le temps de faire toute son exécution
+			//si c'est pas le cas baaah, c'est une erreur
+			if(params->p[i]->curr_charge > 0)
+			{
+				error(EXEC_ERROR);
+			}
+			else
+			{
+				params->p[i]->curr_charge = params->p[i]->charge;
+			}
+		}
+	}
+	
+	//on vérifie si la première tâche apériodique (si elle existe) 
+	//de la liste des a_taches prêtes a encore de la charge à exécuter
+	if(params->a_rdy[0] != 0)
+	{
+		//sinon on la sort de la file
+		if(params->a[params->a_rdy[0]]->curr_charge == 0)
+		{
+			//on parcours la liste des tâches apériodiques prêtes à être exécutées
+			//et on bouge chacune d'elles à la case d'avant (on fait défiler quoi)
+			for(i = 1; i < params->a_size; i++)
+			{
+				//si on est arrivé au bout de la file on sort
+				if(params->a_rdy[i] == 0)
+				{
+					break;
+				}
+				params->a_rdy[i - 1] = params->a_rdy[i];
+			}
+		}
+	}
+	
+	// on vérifie dans la liste des tâches apériodiques la ou lesquelles 
+	// sont supposées commencer lors de ce cycle
+	for(i = 0; i < params->a_size; i++)
+	{
+		if(params->a[i]->t == params->curr_cycle)
+		{
+			//on la ou les ajoute en bout de file
+			for(i = 0; i < params->a_size; i++)
+			{
+				if(params->a_rdy[i] == 0)
+				{
+					params->a_rdy[i] = params->a[i]->num;
+					break;
+				}
+			}
+		}
+	}
+}
+
 void cycle(struct params_serv *params)
 {
+	check_tasks(params);
+	
 	//on regarde si on a une tache périodique à lancer
 	int p_prio = get_tache_prio(params);
 
@@ -219,14 +304,15 @@ void cycle(struct params_serv *params)
 		// Si le serveur a la priorité et a une tâche à lancer il la lance
 		if((params->p[p_prio]->t > params->s->Ps) && params->a_rdy[0] > 0)
 		{
-			
+			exec_a(params);
 		}
 		//sinon on lance la tâche périodique
 		else
 		{
-			
+			exec_p(params, p_prio);
 		}
 	}
+	
 }
 
 int main(int argc, char *argv[])
@@ -247,6 +333,11 @@ int main(int argc, char *argv[])
     params.p = &taches_periodiques;
 
     read_conf(&params);
+    
+    for(int i = 0; i < NUM_CYCLES; i++)
+    {
+		
+	}
 
     return 0;
 }
