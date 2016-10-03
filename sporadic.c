@@ -10,7 +10,6 @@
 #define FICHIER_CONF "conf_sporadic"
 #define CONF_ERROR 0
 #define EXEC_ERROR 1
-
 #define NUM_CYCLES 30
 
 typedef char bool;
@@ -40,6 +39,104 @@ typedef struct params_serv
     int *a_rdy;
     int curr_cycle;
 } Param;
+
+typedef struct structDelay
+{
+	int delay;
+	int charge;
+	struct structDelay *next;
+} Delay, *Delays;
+
+// add an element at the end
+void D_add(Delays *list, int delay, int charge)
+{
+	Delays l = *list;
+	if(l == NULL)
+		l = malloc(sizeof(Delay));
+	else
+	{
+		for(l = (*list); l->next!=NULL; l = l->next);
+		l->next = malloc(sizeof(Delay));
+		l = l->next;
+	}	
+	l->delay = delay;
+	l->charge = charge;
+	l->next = NULL;
+}
+
+// delete the first element
+void D_del(Delays *list)
+{
+	Delays l = *list;
+	if(l != NULL)
+	{
+		if(l->next == NULL)
+		{
+			free(l);
+			*list = NULL;
+		}
+		else
+		{
+			l = l->next;
+			free(*list);
+			*list = l;
+		}
+	}
+}
+
+void D_close(Delays *list)
+{
+	while((*list) != NULL)
+		D_del(list);
+}
+
+// to call at each new task
+int D_update(Delays *list, int delay_reduce)
+{
+	int chargeUp = 0;
+	for(Delays l = *list; l != NULL; l = l->next){
+		l->delay -= delay_reduce;
+		if(l->delay == 0)
+		{
+			chargeUp += l->charge;
+			D_del(list); // first to desappear are first on the list
+		}
+	}
+	return chargeUp;
+}
+
+/* Une tâche apériodique a la priorité du serveur.
+ * La charge du serveur diminue au lancement d'une tâche apériodique de sa charge, mais augmente après ce lancement avec un délai de serveur.periode cycles
+ * A n'appeler que lors du lancement d'une tâche apériodique
+ * Code à include dans cycle
+*/
+int chck_charge(Param *params, bool finish, a_tache task)
+{
+	// ALLOCATIONS
+	static int Charge = -1; // Charge serveur à un temps donné
+	static Delays linked_list = NULL;
+
+	if(Charge == -1) // Init with constant element
+		Charge = params->srv->Cs;
+
+	// INCREMENTATION DU TEMPS
+	Charge += D_update(&linked_list, 1);
+
+	// Libérer proprement la mémoire
+	if(finish) 
+		D_close(&linked_list);
+
+	// TASK CHOICE
+	if(Charge < task.charge) // charge du serveur inférieure à la charge de la tâche, erreur à gérer par la suite
+	{
+		printf("Charge de la tâche apériodique = %d > charge du serveur = %d\n", task.charge, Charge);
+		return -1;
+	}
+
+	Charge -= task.charge;
+	D_add(&linked_list, params->srv->Ps, task.charge);
+	return 0;
+}
 
 void error(int type)
 {
@@ -248,18 +345,20 @@ int get_tache_prio(struct params_serv *params)
 void exec_p(struct params_serv *params, int tache)
 {
 	params->p[tache]->curr_charge--;
+	chck_charge(params, 0, *(params->p[tache]));
 }
 
 void exec_a(struct params_serv *params)
 {
 	int tache = params->a_rdy[0];
 	params->a[0]->curr_charge--;
+	chck_charge(params, 0, *(params->a[0]));
 }
 
 void check_tasks(struct params_serv *params)
 {
 	int i;
-	
+
 	//on vérifie pour toutes les tâches périodiques si leur période recommence
 	//si c'est le cas on leur rend leur charge totale à exécuter
 	for(i = 0; i < params->p_size; i++)
@@ -294,9 +393,7 @@ void check_tasks(struct params_serv *params)
 			{
 				//si on est arrivé au bout de la file on sort
 				if(params->a_rdy[i] == 0)
-				{
 					break;
-				}
 				params->a_rdy[i - 1] = params->a_rdy[i];
 			}
 		}
@@ -324,7 +421,6 @@ void check_tasks(struct params_serv *params)
 void cycle(struct params_serv *params)
 {
 	check_tasks(params);
-	
 	//on regarde si on a une tache périodique à lancer
 	int p_prio = get_tache_prio(params);
 
@@ -344,130 +440,20 @@ void cycle(struct params_serv *params)
 	}
 }
 
-typedef struct structDelay
-{
-	int delay;
-	int charge;
-	struct structDelay *next;
-} Delay, *Delays;
-
-// add an element at the end
-void D_add(Delays *list, int delay, int charge)
-{
-	Delays l = *list;
-	if(l == NULL)
-		l = malloc(sizeof(Delay));
-	else
-	{
-		for(l = (*list); l->next!=NULL; l = l->next);
-		l->next = malloc(sizeof(Delay));
-		l = l->next;
-	}	
-	l->delay = delay;
-	l->charge = charge;
-	l->next = NULL;
-}
-
-// delete the first element
-void D_del(Delays *list)
-{
-	Delays l = *list;
-	if(l != NULL)
-	{
-		if(l->next == NULL)
-		{
-			free(l);
-			*list = NULL;
-		}
-		else
-		{
-			l = l->next;
-			free(*list);
-			*list = l;
-		}
-	}
-}
-
-void D_close(Delays *list)
-{
-	while((*list) != NULL)
-		D_del(list);
-}
-
-// to call at each new task
-int D_update(Delays *list, int delay_reduce)
-{
-	int chargeUp = 0;
-	for(Delays l = *list; l != NULL; l = l->next){
-		l->delay -= delay_reduce;
-		if(l->delay == 0)
-		{
-			chargeUp += l->charge;
-			D_del(list); // first to desappear are first on the list
-		}
-	}
-	return chargeUp;
-}
-
-/* Une tâche apériodique a la priorité du serveur.
- * La charge du serveur diminue au lancement d'une tâche apériodique de sa charge, mais augmente après ce lancement avec un délai de serveur.periode cycles
- * A n'appeler que lors du lancement d'une tâche apériodique
- * Code à include dans cycle
-*/
-int call_chck_charge(Param *params, bool finish, a_tache task)
-{
-	// ALLOCATIONS
-	static int Charge = -1; // Charge serveur à un temps donné
-	static Delays linked_list = NULL;
-
-	if(Charge == -1) // Init with constant element
-		Charge = params->srv->Cs;
-
-	// INCREMENTATION DU TEMPS
-	Charge += D_update(&linked_list, 1);
-
-	// Libérer proprement la mémoire
-	if(finish) 
-		D_close(&linked_list);
-
-	// TASK CHOICE
-	if(Charge < task.charge) // charge du serveur inférieure à la charge de la tâche, erreur à gérer par la suite
-	{
-		printf("Charge de la tâche apériodique = %d > charge du serveur = %d\n", task.charge, Charge);
-		return -1;
-	}
-	
-	
-	if(Charge < task.charge) // charge du serveur inférieure à la charge de la tâche, erreur à gérer par la suite
-	{
-		printf("Charge de la tâche apériodique = %d > charge du serveur = %d\n", task.charge, Charge);
-		return -1;
-	}
-	Charge -= task.charge;
-	D_add(&linked_list, params->srv->Ps, task.charge);
-	return 0;
-}
-
 int main(int argc, char *argv[])
 {
 	unsigned int Time = 0;
-    Param params;
+	Param params;
 
 	// Server initialisation
 	if(argc != 4)
 		usage(argv[0]);
 	parse_args(argv, params.srv);
+	read_conf(&params);
 
-    read_conf(&params);
-
-    if(CNS(*(params.p), params.p_size) == -1)
+	if(CNS(*(params.p), params.p_size) == -1)
 		printf("Non ordonnançable.\n");
-	return 0;
-    
-    for(int i = 0; i < NUM_CYCLES; i++)
-    {
-		
-	}
 
-    return 0;
+	//for(int i = 0; i < NUM_CYCLES; i++);
+	return 0;
 }
