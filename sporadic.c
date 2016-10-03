@@ -290,27 +290,12 @@ double iterate_CNS(int i, int k, int m,
 */
 char CNS(p_tache *p_tasks, int nb_p_tasks)
 {
-	int sigma = 0;
-	char is_i_schedulable;
 	for(int i = 0; i<nb_p_tasks; ++i)
-	{
 		for(int k = 0; k<i; ++k)
-		{
-			is_i_schedulable = -1;
-			for(int m = 1; m<i+1; ++m)
-			{
+			for(int m = 1; m <= i; ++m)
 				if(iterate_CNS(i, k, m, p_tasks, nb_p_tasks) <= 1.)
-				{
-					is_i_schedulable = 1;
-					break;
-				}
-			}
-			if(is_i_schedulable == 1)
-				break;
-		}
-		if(is_i_schedulable != 1)
-			return -1;
-	}
+					return 0;
+	return -1;
 }
 
 //une tâche périodique est disponible si elle a encore de la charge à exécuter
@@ -589,6 +574,10 @@ int main(int argc, char *argv[])
 	{
 		printf("Non ordonnançable.\n");
 		return 1;
+	}
+	else
+	{
+		printf("CNS vérifiée : ordonnançable.\n");
 	}
 //	a_tache *taches_aperiodiques;
 //	p_tache *taches_periodiques;
