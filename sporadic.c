@@ -585,11 +585,11 @@ int main(int argc, char *argv[])
 		usage(argv[0]);
 	parse_args(argv);
 	read_conf();
-	/*if(CNS(params.p, params.p_size) == -1)
+	if(CNS(params.p, params.p_size) == -1)
 	{
 		printf("Non ordonnançable.\n");
 		return 1;
-	}*/
+	}
 //	a_tache *taches_aperiodiques;
 //	p_tache *taches_periodiques;
 //	params.a = taches_aperiodiques;
