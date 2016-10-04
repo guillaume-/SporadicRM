@@ -10,9 +10,7 @@
 #define FICHIER_CONF "conf_sporadic"
 #define CONF_ERROR 0
 #define EXEC_ERROR 1
-#define NUM_CYCLES 30
 #define DEFAULT_MAX_CYCLES 50
-
 typedef char bool;
 
 typedef struct
@@ -166,7 +164,7 @@ int chck_charge(bool finish, a_tache task)
 	// TASK CHOICE
 	if(Charge < task.charge) // charge du serveur inférieure à la charge de la tâche, erreur à gérer par la suite
 	{
-		printf("Charge de la tâche apériodique = %d > charge du serveur = %d\n", task.charge, Charge);
+		printf("Charge de la tâche apériodique = %d => charge du serveur = %d\n", task.charge, Charge);
 		return -1;
 	}
 
@@ -178,97 +176,103 @@ int chck_charge(bool finish, a_tache task)
 //lit le fichier de configuration et remplit les deux tableaux reçus en paramètre
 void read_conf()
 {
-	//on ouvre le fichier de config
-	FILE *conf;
-	conf = fopen(FICHIER_CONF, "r+");
+    FILE *conf;
+    conf = fopen(FICHIER_CONF, "r+");
 
-	//on prépare le buffer qui contiendra les lignes qu'on va lire une par une
-	char buffer[64];
-	//les tableaux auront une taille initiale correspondant à 5 tâches chacun
-	int taches_a_size = 5;
-	int taches_p_size = 5;
-	//ces deux indices servent à retenir combien de tâches sont déjà présentes dans le tableau
-	int num_taches_a = 0;
-	int num_taches_p = 0;
+    char buffer[64];
 
-	//on alloue la taille de chaque tableau
-	params.a = (a_tache*)calloc(taches_a_size, sizeof(a_tache));
-	params.p = (a_tache*)calloc(taches_p_size, sizeof(p_tache));
+    int taches_a_size = 5;
+    int taches_p_size = 5;
 
-	//contiendront provisoirement les informations relatives à la tâche en train d'être lue dans le fichier de config
-	char charge[3];
-	char t[3];
-	char num;
-	//on retient les positions des séparateurs des attributs de la tâche
-	// la tâche est sous la forme 'Tx={y,z}' donc on retient la position de la virgule et de l'accolade fermante
-	int poscoma = 0;
-	int posbrace = 0;
+    //ces deux indices servent à retenir combien de tâches sont déjà présentes dans le tableau
+    int num_taches_a = 0;
+    int num_taches_p = 0;
 
-	//tant qu'on a pas lu l'entièreté du fichier de conf
-	while(!feof(conf))
-	{
-		//on lit une ligne
-		fscanf(conf, "%s", buffer);
+    params.a = (a_tache*)calloc(taches_a_size, sizeof(a_tache));
+    params.p = (a_tache*)calloc(taches_p_size, sizeof(p_tache));
 
-		if(buffer[0] == 'P')
-		{
-			//on récupère les positions de la virgule et de l'accolade, puisque les nombres peuvent avoir plusieurs chiffres
-			poscoma = strchr(buffer, ',') - buffer;
-			posbrace = strchr(buffer, '}') - buffer;
+    //contiendront provisoirement les informations relatives à la tâche en train d'être lue dans le fichier de config
+    char charge[3];
+    char t[3];
+    char num;
 
-			//on récupère la charge et la période/la date de début
-			strncpy(charge, buffer + 4, poscoma - 4);
-			strncpy(t, buffer + poscoma + 1, posbrace - poscoma + 1);
+    //on retient les positions des séparateurs des attributs de la tâche
+    // la tâche est sous la forme 'Tx={y,z}' donc on retient la position de la virgule et de l'accolade fermante
+    int poscoma = 0;
+    int posbrace = 0;
 
-			//le numéro est contenu dans le deuxième caractère du buffer, à étendre si on a plus de 10 tâches
-			num = buffer[1];
+    while(!feof(conf))
+    {
+        fscanf(conf, "%s", buffer);
 
-			//on stocke les informations des variables provisoires dans le tableau
-			params.p[num_taches_p].num = num - '0';
-			params.p[num_taches_p].charge = atoi(charge);
-			params.p[num_taches_p].curr_charge = atoi(charge);
-			params.p[num_taches_p].t = atoi(t);
+        if(buffer[0] == 'P')
+        {
+            //on récupère les positions de la virgule et de l'accolade, puisque les nombres peuvent avoir plusieurs chiffres
+            poscoma = strchr(buffer, ',') - buffer;
+            posbrace = strchr(buffer, '}') - buffer;
 
-			num_taches_p++;
-		}
-		else if(buffer[0] == 'A')
-		{
-			poscoma = strchr(buffer, ',') - buffer;
-			posbrace = strchr(buffer, '}') - buffer;
+            //on récupère la charge et la période/la date de début
+            strncpy(charge, buffer + 4, poscoma - 4);
+            strncpy(t, buffer + poscoma + 1, posbrace - poscoma + 1);
 
-			strncpy(charge, buffer + 4, poscoma - 4);
-			strncpy(t, buffer + poscoma + 1, posbrace - poscoma + 1);
+            //le numéro est contenu dans le deuxième caractère du buffer, à étendre si on a plus de 10 tâches
+            num = buffer[1];
 
-			num = buffer[1];
+            //on stocke les informations des variables provisoires dans le tableau
+            params.p[num_taches_p].num = num - '0';
+            params.p[num_taches_p].charge = atoi(charge);
+            params.p[num_taches_p].curr_charge = atoi(charge);
+            params.p[num_taches_p].t = atoi(t);
 
-			params.a[num_taches_a].num = num - '0';
-			params.a[num_taches_a].charge = atoi(charge);
-			params.a[num_taches_a].curr_charge = atoi(charge);
-			params.a[num_taches_a].t = atoi(t);
-			num_taches_a++;
-		}
-		else if(buffer[0] != 0 && buffer[0] != '#')
-		{
-			error(CONF_ERROR);
-		}
-		buffer[0] = '\0';
-		charge[0] = '\0';
-		t[0] = '\0';
-	}
-	//*taches_p = realloc(*taches_p, sizeof(p_tache) * num_taches_p);
-	//*taches_a = realloc(*taches_a, sizeof(a_tache) * num_taches_a);
-	params.a_rdy = calloc(num_taches_a, sizeof(int));
-//	for(int i = 0; i < num_taches_p; i++)
-//	{
-//		printf("T : P%d charge = %d t = %d \n", params.p[i].num, params.p[i].charge, params.p[i].t);
-//	}
-//	for(int i = 0; i < num_taches_a; i++)
-//	{
-//		printf("T : A%d charge = %d t = %d \n", params.a[i].num, params.a[i].charge, params.a[i].t);
-//	}
-	params.a_size = num_taches_a;
-	params.p_size = num_taches_p;
-	fclose(conf);
+            num_taches_p++;
+        }
+        else if(buffer[0] == 'A')
+        {
+            poscoma = strchr(buffer, ',') - buffer;
+            posbrace = strchr(buffer, '}') - buffer;
+
+            strncpy(charge, buffer + 4, poscoma - 4);
+            strncpy(t, buffer + poscoma + 1, posbrace - poscoma + 1);
+
+            num = buffer[1];
+
+            params.a[num_taches_a].num = num - '0';
+            params.a[num_taches_a].charge = atoi(charge);
+            params.a[num_taches_a].curr_charge = atoi(charge);
+            params.a[num_taches_a].t = atoi(t);
+
+            num_taches_a++;
+        }
+        else if(buffer[0] != 0 && buffer[0] != '#')
+        {
+			//si le buffer n'est pas vide mais qu'on a pas de description d'une tâche ou de commentaire c'est qu'il y à une erreur
+            error(CONF_ERROR);
+        }
+        //on vide les tableaux de caractères pour éviter de se retrouver après avec des erreurs dues à des tableaux mal vidés
+        buffer[0] = '\0';
+        charge[0] = '\0';
+        t[0] = '\0';
+    }
+
+    //*taches_p = realloc(*taches_p, sizeof(p_tache) * num_taches_p);
+    //*taches_a = realloc(*taches_a, sizeof(a_tache) * num_taches_a);
+    
+    params.a_rdy = calloc(num_taches_a, sizeof(int));
+
+//DEBUG
+//    for(int i = 0; i < num_taches_p; i++)
+//    {
+//        printf("T : P%d charge = %d t = %d \n", params.p[i].num, params.p[i].charge, params.p[i].t);
+//    }
+//    for(int i = 0; i < num_taches_a; i++)
+//    {
+//        printf("T : A%d charge = %d t = %d \n", params.a[i].num, params.a[i].charge, params.a[i].t);
+//    }
+
+    params.a_size = num_taches_a;
+    params.p_size = num_taches_p;
+
+    fclose(conf);
 }
 
 /* iterate_CNS
@@ -301,12 +305,6 @@ char CNS(p_tache *p_tasks, int nb_p_tasks)
 //une tâche périodique est disponible si elle a encore de la charge à exécuter
 int available(p_tache *p)
 {
-	//on décide quelle tâche a la priorité
-	//de base on dit que c'est le serveur
-	int max_prio = params.srv.Ps;
-	if(p->curr_charge > 0)
-		return 1;
-	return 0;
 	printf("P%d a une charge de : %d (P = %d) \n", p->num, p->curr_charge, p->t);
 	if(p->curr_charge > 0)
 	{
@@ -316,6 +314,9 @@ int available(p_tache *p)
 //	printf(" -> unavailable\n");
 	return 0;
 }
+
+void exec_p(p_tache *p);
+void exec_a();
 
 int get_tache_prio()
 {
@@ -355,83 +356,20 @@ int get_tache_prio()
 	return -1;
 }
 
-void exec_p(p_tache *p)
-{
-	p->curr_charge--;
-}
-
-void exec_a()
-{
-	int tache = params.a_rdy[0];
-	params.a[tache].curr_charge--;
-	chck_charge(0, params.a[tache]);
-}
 
 p_tache *get_ptask_from_num(int num)
 {
-	int i;
-	//on vérifie pour toutes les tâches périodiques si leur période recommence
-	//si c'est le cas on leur rend leur charge totale à exécuter
-	for(i = 0; i < params.p_size; i++)
+	for(int i = 0; i < params.p_size; i++)
 	{
-		//si le cycle courant est un multiple de la période de la tâche courante
-		//alors la tâche récupère sa charge courante
-		if(params.curr_cycle % params.p[i].t == 0)
+		if(params.p[i].num == num)
 		{
-			//on vérifie que la tâche a bien eu le temps de faire toute son exécution
-			//si c'est pas le cas baaah, c'est une erreur
-			if(params.p[i].curr_charge > 0)
-			{
-				error(EXEC_ERROR);
-			}
-			else
-			{
-				params.p[i].curr_charge = params.p[i].charge;
-			}
-		}
-	}
-	
-	//on vérifie si la première tâche apériodique (si elle existe) 
-	//de la liste des a_taches prêtes a encore de la charge à exécuter
-	if(params.a_rdy[0] != 0)
-	{
-		//sinon on la sort de la file
-		if(params.a[params.a_rdy[0]].curr_charge == 0)
-		{
-			//on parcours la liste des tâches apériodiques prêtes à être exécutées
-			//et on bouge chacune d'elles à la case d'avant (on fait défiler quoi)
-			for(i = 1; i < params.a_size; i++)
-			{
-				//si on est arrivé au bout de la file on sort
-				if(params.a_rdy[i] == 0)
-					break;
-				params.a_rdy[i - 1] = params.a_rdy[i];
-			}
+			return &params.p[i];
 		}
 	}
 }
 
-void check_tasks();
 a_tache* get_atask_from_num(int num)
 {
-	check_tasks();
-	//on regarde si on a une tache périodique à lancer
-	int p_prio = get_tache_prio(params);
-
-	//si c'est le cas on vérifie que sa priorité est effectivement plus grande que celle du serveur
-	if(p_prio != -1)
-	{
-		// Si le serveur a la priorité et a une tâche à lancer il la lance
-		if((params.p[p_prio].t > params.srv.Ps) && params.a_rdy[0] > 0)
-		{
-			exec_a();
-		}
-		//sinon on lance la tâche périodique
-		else
-		{
-			exec_p(&(params.p[p_prio]));
-		}
-	}
 	for(int i = 0; i < params.a_size; i++)
 	{
 		if(params.a[i].num == num)
@@ -439,137 +377,193 @@ a_tache* get_atask_from_num(int num)
 			return &params.a[i];
 		}
 	}
-	return NULL;
 }
 
-void check_tasks()
+void task_ready(int num)
 {
-	int i;
-
-	//on vérifie pour toutes les tâches périodiques si leur période recommence
-	//si c'est le cas on leur rend leur charge totale à exécuter
-	for(i = 0; i < params.p_size; i++)
+	printf("La tâche apériodique A%d commence ce cycle \n", num);
+	//on la ou les ajoute en bout de file
+	for(int i = 0; i < params.a_size; i++)
 	{
-		//si le cycle courant est un multiple de la période de la tâche courante
-		//alors la tâche récupère sa charge courante
-		if(params.curr_cycle % params.p[i].t == 0 && params.curr_cycle != 0)
+		if(params.a_rdy[i] == 0)
 		{
-			//on vérifie que la tâche a bien eu le temps de faire toute son exécution
-			//si c'est pas le cas baaah, c'est une erreur
-			if(params.p[i].curr_charge > 0)
-			{
-				printf("Cycle %d : la tache %d a encore %d charge à exécuter\n", params.curr_cycle, params.p[i].num, params.p[i].charge);
-			}
-			else
-			{
-				params.p[i].curr_charge = params.p[i].charge;
-			}
+			params.a_rdy[i] = num;
+			break;
 		}
 	}
+}
 
-	//on vérifie si la première tâche apériodique (si elle existe)
-	//de la liste des a_taches prêtes a encore de la charge à exécuter
-	if(params.a_rdy[0] != 0)
-	{
-		//sinon on la sort de la file
-		if(params.a[params.a_rdy[0]].curr_charge == 0)
-		{
-			params.a_rdy[0] = 0;
+void exec_p(p_tache *p)
+{
+    p->curr_charge--;
+}
 
-			//on parcours la liste des tâches apériodiques prêtes à être exécutées
-			//et on bouge chacune d'elles à la case d'avant (on fait défiler quoi)
-			for(i = 1; i < params.a_size; i++)
-			{
-				//si on est arrivé au bout de la file on sort
-				if(params.a_rdy[i] == 0)
-				{
-					break;
-				}
-				params.a_rdy[i - 1] = params.a_rdy[i];
-				params.a_rdy[i] = 0;
-			}
+void exec_a()
+{
+    a_tache* tache = get_atask_from_num(params.a_rdy[0]);
+    tache->curr_charge--;
+    chck_charge(0, *tache);
+}
+
+
+int check_tasks()
+{
+    int i;
+
+    //on vérifie pour toutes les tâches périodiques si leur période recommence
+    //si c'est le cas on leur rend leur charge totale à exécuter
+    for(i = 0; i < params.p_size; i++)
+    {
+        //si le cycle courant est un multiple de la période de la tâche courante
+        //alors la tâche récupère sa charge courante
+        if((params.curr_cycle - params.srv.r0) % params.p[i].t == 0  && params.curr_cycle != 0 + params.srv.r0)
+        {
+            //on vérifie que la tâche a bien eu le temps de faire toute son exécution
+            //si c'est pas le cas baaah, c'est une erreur
+            if(params.p[i].curr_charge > 0)
+            {
+                printf("Cycle %d : la tache %d a encore %d charge à exécuter\n", params.curr_cycle, params.p[i].num, params.p[i].charge);
+                return 1;
+            }
+            else
+            {
+				printf("La tache P%d a de nouveau de la charge d'exécution\n", params.p[i].num);
+                params.p[i].curr_charge = params.p[i].charge;
+            }
+        }
+    }
+ 
+    //on vérifie si la première tâche apériodique (si elle existe)
+    //de la liste des a_taches prêtes a encore de la charge à exécuter
+    if(params.a_rdy[0] != 0)
+    {
+        //sinon on la sort de la file
+        if(get_atask_from_num(params.a_rdy[0])->curr_charge == 0)
+        {
+            params.a_rdy[0] = 0;
+			
+            //on parcours la liste des tâches apériodiques prêtes à être exécutées
+            //et on bouge chacune d'elles à la case d'avant (on fait défiler quoi)
+            for(i = 1; i < params.a_size; i++)
+            {
+                //si on est arrivé au bout de la file on sort
+                if(params.a_rdy[i] == 0)
+                {
+                    break;
+                }
+                params.a_rdy[i - 1] = params.a_rdy[i];
+                params.a_rdy[i] = 0;
+            }
+        }
+    }
+
+    // on vérifie dans la liste des tâches apériodiques la ou lesquelles
+    // sont supposées commencer lors de ce cycle
+    for(i = 0; i < params.a_size; i++)
+    {
+        if(params.a[i].t == params.curr_cycle)
+        {
+            task_ready(params.a[i].num);
+        }
+        else if(params.srv.r0 > params.a[i].t && params.srv.r0 == params.curr_cycle)
+        {
+			task_ready(params.a[i].num);
 		}
-	}
-
-	// on vérifie dans la liste des tâches apériodiques la ou lesquelles
-	// sont supposées commencer lors de ce cycle
-	for(i = 0; i < params.a_size; i++)
-	{
-		if(params.a[i].t == params.curr_cycle)
-		{
-			printf("La tâche apériodique A%d commence ce cycle \n", params.a[i].num);
-			//on la ou les ajoute en bout de file
-			for(i = 0; i < params.a_size; i++)
-			{
-				if(params.a_rdy[i] == 0)
-				{
-					params.a_rdy[i] = params.a[i].num;
-					break;
-				}
-			}
-		}
-	}
+    }
+    
+    return 0;
 }
 
 int cycle()
 {
-	check_tasks();
+    if(check_tasks())
+    {
+		printf("Impossible d'effectuer un ordonnancement correct \n");
+		return -1;
+	}
 
-	//on regarde si on a une tache périodique à lancer
-	int p_prio = get_tache_prio();
+    //on regarde si on a une tache périodique à lancer
+    int p_prio = get_tache_prio();
 
-	if(params.a_rdy[0] > 0)
-	{
-		printf("Les tâches aperiodiques attendant d'être exécutées sont : \n");
-		int a = 0;
-		for(int i = 0; i < params.a_size; i++)
+    if(params.a_rdy[0] > 0)
+    {
+        printf("\nLes tâches aperiodiques attendant d'être exécutées sont : \n");
+        int a = 0;			
+
+        for(int i = 0; i < params.a_size; i++)
+        {
+            if(params.a_rdy[i] > 0)
+            {
+               a = params.a_rdy[i];
+               printf("A%d : charge = %d\n\n", get_atask_from_num(a)->num, get_atask_from_num(a)->curr_charge);
+            }
+        }
+    }
+
+    //si c'est le cas on vérifie que sa priorité est effectivement plus grande que celle du serveur
+    if(p_prio != -1)
+    {
+        p_tache *prio = get_ptask_from_num(p_prio);
+		
+		if(params.a_rdy[0] > 0)
 		{
-			if(params.a_rdy[i] > 0)
+			a_tache *a = get_atask_from_num(params.a_rdy[0]);
+			
+			// Si le serveur a la priorité et a une tâche à lancer il la lance
+			if((prio->t > params.srv.Ps) && a->curr_charge > 0)
 			{
-			   a = params.a_rdy[a];
-			   printf("A%d : charge = %d\n", params.a[a].num, params.a[a].curr_charge);
+				printf("Le serveur a la priorité ce cycle donc on exécute la tâche apériodique A%d à qui il reste %d à exécuter \n", a->num, a->curr_charge);
+				exec_a();
+			}
+			else
+			{
+				printf("\nOn a une tâche à exécuter avant le serveur : P%d\n", prio->num);
+				exec_p(prio);
 			}
 		}
-	}
+        //sinon on lance la tâche périodique
+        else
+        {
+            printf("\nLe serveur n'a pas de tâche à exécuter de toute façon : on exécute %d\n", prio->num);
 
-	//si c'est le cas on vérifie que sa priorité est effectivement plus grande que celle du serveur
-	if(p_prio != -1)
-	{
-		p_tache *prio = get_ptask_from_num(p_prio);
-		// Si le serveur a la priorité et a une tâche à lancer il la lance
-		if((prio->t > params.srv.Ps) && params.a_rdy[0] > 0 && params.a[params.a_rdy[0]].curr_charge > 0)
-		{
-			printf("Le serveur a la priorité ce cycle donc on exécute la tâche apériodique %d à qui il reste %d à exécuter \n", params.a_rdy[0], params.a[params.a_rdy[0]].curr_charge);
-			exec_a();
-		}
-		//sinon on lance la tâche périodique
-		else
-		{
-			printf("\nOn a une tâche à exécuter avant le serveur : %d\n", prio->num);
-
-			exec_p(prio);
-		}
-	}
-	else if(params.a_rdy[0] > 0)
-	{
-		exec_a();
-	}
-	else
-	{
-		printf("Rien à faire ce cycle\n");
-		printf("Ordonnancement trouvé en %d cycles\n ", params.curr_cycle - 1);
-		return 1;
-	}
-	return 0;
+            exec_p(prio);
+        }
+    }
+    else if(params.a_rdy[0] > 0 && get_atask_from_num(params.a_rdy[0])->curr_charge > 0 )
+    {
+		printf("Pas de tâche périodique à exécuter : le serveur exécute A%d\n", get_atask_from_num(params.a_rdy[0])->num);
+        exec_a();
+    }
+    else
+    {
+        printf("Rien à faire ce cycle\n");
+        printf("Ordonnancement trouvé en %d cycles\n ", params.curr_cycle - 1 - params.srv.r0);
+        
+        return 1;
+    }
+    
+    return 0;
 }
 
 int main(int argc, char *argv[])
 {
-	// Server initialisation
-	if(argc != 4)
-		usage(argv[0]);
-	parse_args(argv);
-	read_conf();
+    if(argc != 4)
+    {
+        usage(argv[0]);
+    }
+    parse_args(argv);
+	
+//    a_tache *taches_aperiodiques;
+//    p_tache *taches_periodiques;
+
+//    params.a = taches_aperiodiques;
+//    params.p = taches_periodiques;
+
+
+    params.curr_cycle = params.srv.r0;
+
+    read_conf();
+
 	if(CNS(params.p, params.p_size) == -1)
 	{
 		printf("Non ordonnançable.\n");
@@ -579,22 +573,20 @@ int main(int argc, char *argv[])
 	{
 		printf("CNS vérifiée : ordonnançable.\n");
 	}
-//	a_tache *taches_aperiodiques;
-//	p_tache *taches_periodiques;
-//	params.a = taches_aperiodiques;
-//	params.p = taches_periodiques;
-	params.curr_cycle = 0;
 
-	int success = 0;
-	while(!success && params.curr_cycle < max_cycles)
-	{
-		printf("\n----------CYCLE NUMERO %d---------- \n\n", params.curr_cycle);
-		success = cycle();
-		params.curr_cycle++;
-	}
-	if(!success)
-	{
-		printf("Pas trouvé d'ordonnancement en moins de %d cycles", max_cycles);
-	}
-	return 0;
+    int success = 0;
+
+    while(!success && params.curr_cycle < max_cycles)
+    {
+        printf("\n\n----------CYCLE NUMERO %d---------- \n\n", params.curr_cycle);
+        success = cycle();
+        params.curr_cycle++;
+    }
+
+    if(!success)
+    {
+        printf("Pas trouvé d'ordonnancement en moins de %d cycles", max_cycles - params.srv.r0);
+    }
+
+    return 0;
 }
