@@ -63,6 +63,7 @@ void error(int type)
 			printf("Erreur");
 			break;
 	}
+	printf("\n");
 }
 
 void usage(char *progname)
@@ -205,49 +206,57 @@ void read_conf()
     {
         fscanf(conf, "%s", buffer);
 
-        if(buffer[0] == 'P')
+		if(buffer[0] == 0)
+		{
+			break;
+		}
+        else
         {
-            //on récupère les positions de la virgule et de l'accolade, puisque les nombres peuvent avoir plusieurs chiffres
-            poscoma = strchr(buffer, ',') - buffer;
-            posbrace = strchr(buffer, '}') - buffer;
+			if(buffer[1] == 'P')
+			{
+				//on récupère les positions de la virgule et de l'accolade, puisque les nombres peuvent avoir plusieurs chiffres
+				poscoma = strchr(buffer, ',') - buffer;
+				posbrace = strchr(buffer, '}') - buffer;
 
-            //on récupère la charge et la période/la date de début
-            strncpy(charge, buffer + 4, poscoma - 4);
-            strncpy(t, buffer + poscoma + 1, posbrace - poscoma + 1);
+				//on récupère la charge et la période/la date de début
+				strncpy(charge, buffer + 5, poscoma - 5);
+				strncpy(t, buffer + poscoma + 1, posbrace - poscoma + 1);
 
-            //le numéro est contenu dans le deuxième caractère du buffer, à étendre si on a plus de 10 tâches
-            num = buffer[1];
+				//le numéro est contenu dans le deuxième caractère du buffer, à étendre si on a plus de 10 tâches
+				num = buffer[2];
 
-            //on stocke les informations des variables provisoires dans le tableau
-            params.p[num_taches_p].num = num - '0';
-            params.p[num_taches_p].charge = atoi(charge);
-            params.p[num_taches_p].curr_charge = atoi(charge);
-            params.p[num_taches_p].t = atoi(t);
+				//on stocke les informations des variables provisoires dans le tableau
+				params.p[num_taches_p].num = num - '0';
+				params.p[num_taches_p].charge = atoi(charge);
+				params.p[num_taches_p].curr_charge = atoi(charge);
+				params.p[num_taches_p].t = atoi(t);
 
-            num_taches_p++;
-        }
-        else if(buffer[0] == 'A')
-        {
-            poscoma = strchr(buffer, ',') - buffer;
-            posbrace = strchr(buffer, '}') - buffer;
+				num_taches_p++;
+			}
+			else if(buffer[1] == 'A')
+			{
+				poscoma = strchr(buffer, ',') - buffer;
+				posbrace = strchr(buffer, '}') - buffer;
 
-            strncpy(charge, buffer + 4, poscoma - 4);
-            strncpy(t, buffer + poscoma + 1, posbrace - poscoma + 1);
+				strncpy(charge, buffer + 5, poscoma - 5);
+				strncpy(t, buffer + poscoma + 1, posbrace - poscoma + 1);
 
-            num = buffer[1];
+				num = buffer[2];
 
-            params.a[num_taches_a].num = num - '0';
-            params.a[num_taches_a].charge = atoi(charge);
-            params.a[num_taches_a].curr_charge = atoi(charge);
-            params.a[num_taches_a].t = atoi(t);
+				params.a[num_taches_a].num = num - '0';
+				params.a[num_taches_a].charge = atoi(charge);
+				params.a[num_taches_a].curr_charge = atoi(charge);
+				params.a[num_taches_a].t = atoi(t);
 
-            num_taches_a++;
-        }
-        else if(buffer[0] != 0 && buffer[0] != '#')
-        {
-			//si le buffer n'est pas vide mais qu'on a pas de description d'une tâche ou de commentaire c'est qu'il y à une erreur
-            error(CONF_ERROR);
-        }
+				num_taches_a++;
+			}
+			else if(buffer[0] != '#')
+			{
+				printf("%s\n", buffer);
+				error(CONF_ERROR);
+			}
+		}
+        
         //on vide les tableaux de caractères pour éviter de se retrouver après avec des erreurs dues à des tableaux mal vidés
         buffer[0] = '\0';
         charge[0] = '\0';
@@ -260,14 +269,14 @@ void read_conf()
     params.a_rdy = calloc(num_taches_a, sizeof(int));
 
 //DEBUG
-//    for(int i = 0; i < num_taches_p; i++)
-//    {
-//        printf("T : P%d charge = %d t = %d \n", params.p[i].num, params.p[i].charge, params.p[i].t);
-//    }
-//    for(int i = 0; i < num_taches_a; i++)
-//    {
-//        printf("T : A%d charge = %d t = %d \n", params.a[i].num, params.a[i].charge, params.a[i].t);
-//    }
+    for(int i = 0; i < num_taches_p; i++)
+    {
+        printf("TP%d charge = %d t = %d \n", params.p[i].num, params.p[i].charge, params.p[i].t);
+    }
+    for(int i = 0; i < num_taches_a; i++)
+    {
+        printf("TA%d charge = %d t = %d \n", params.a[i].num, params.a[i].charge, params.a[i].t);
+    }
 
     params.a_size = num_taches_a;
     params.p_size = num_taches_p;
@@ -305,9 +314,10 @@ char CNS(p_tache *p_tasks, int nb_p_tasks)
 //une tâche périodique est disponible si elle a encore de la charge à exécuter
 int available(p_tache *p)
 {
-	printf("P%d a une charge de : %d (P = %d) \n", p->num, p->curr_charge, p->t);
+	
 	if(p->curr_charge > 0)
 	{
+		printf("La tâche TP%d doit encore s'exécuter %d cycles cette période (P = %d)\n", p->num, p->curr_charge, p->t);
 //		printf(" -> available\n");
 		return 1;
 	}
@@ -381,7 +391,7 @@ a_tache* get_atask_from_num(int num)
 
 void task_ready(int num)
 {
-	printf("La tâche apériodique A%d commence ce cycle \n", num);
+	printf("La tâche apériodique TA%d commence ce cycle \n", num);
 	//on la ou les ajoute en bout de file
 	for(int i = 0; i < params.a_size; i++)
 	{
@@ -422,12 +432,12 @@ int check_tasks()
             //si c'est pas le cas baaah, c'est une erreur
             if(params.p[i].curr_charge > 0)
             {
-                printf("Cycle %d : la tache %d a encore %d charge à exécuter\n", params.curr_cycle, params.p[i].num, params.p[i].charge);
+                printf("Cycle %d : la tache TP%d a encore %d temps d'exécution à faire cette période\n", params.curr_cycle, params.p[i].num, params.p[i].charge);
                 return 1;
             }
             else
             {
-				printf("La tache P%d a de nouveau de la charge d'exécution\n", params.p[i].num);
+				printf("La tache TP%d a de nouveau du temps d'exécution à effectuer\n", params.p[i].num);
                 params.p[i].curr_charge = params.p[i].charge;
             }
         }
@@ -495,7 +505,7 @@ int cycle()
             if(params.a_rdy[i] > 0)
             {
                a = params.a_rdy[i];
-               printf("A%d : charge = %d\n\n", get_atask_from_num(a)->num, get_atask_from_num(a)->curr_charge);
+               printf("TA%d : charge = %d\n\n", get_atask_from_num(a)->num, get_atask_from_num(a)->curr_charge);
             }
         }
     }
@@ -512,26 +522,26 @@ int cycle()
 			// Si le serveur a la priorité et a une tâche à lancer il la lance
 			if((prio->t > params.srv.Ps) && a->curr_charge > 0)
 			{
-				printf("Le serveur a la priorité ce cycle donc on exécute la tâche apériodique A%d à qui il reste %d à exécuter \n", a->num, a->curr_charge);
+				printf("Le serveur a la priorité ce cycle donc on exécute la tâche apériodique TA%d à qui il reste %d à exécuter \n", a->num, a->curr_charge);
 				exec_a();
 			}
 			else
 			{
-				printf("\nOn a une tâche à exécuter avant le serveur : P%d\n", prio->num);
+				printf("\nLe serveur n'a pas la priorité, on éxécute TP%d\n", prio->num);
 				exec_p(prio);
 			}
 		}
         //sinon on lance la tâche périodique
         else
         {
-            printf("\nLe serveur n'a pas de tâche à exécuter de toute façon : on exécute %d\n", prio->num);
+            printf("\nLe serveur n'a pas de tâche apériodique à exécuter : on exécute TP%d\n", prio->num);
 
             exec_p(prio);
         }
     }
     else if(params.a_rdy[0] > 0 && get_atask_from_num(params.a_rdy[0])->curr_charge > 0 )
     {
-		printf("Pas de tâche périodique à exécuter : le serveur exécute A%d\n", get_atask_from_num(params.a_rdy[0])->num);
+		printf("Pas de tâche périodique à exécuter : le serveur exécute TA%d\n", get_atask_from_num(params.a_rdy[0])->num);
         exec_a();
     }
     else
@@ -558,7 +568,6 @@ int main(int argc, char *argv[])
 
 //    params.a = taches_aperiodiques;
 //    params.p = taches_periodiques;
-
 
     params.curr_cycle = params.srv.r0;
 
