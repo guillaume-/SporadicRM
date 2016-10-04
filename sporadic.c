@@ -351,10 +351,10 @@ int get_tache_prio()
 			}
 			else
 			//sinon on regarde si elle a une plus grande priorité que celle qu'on a actuellement
-				if(params.p[i].t < prio.t)
-				{
-					prio = params.p[i];
-				}
+			if(params.p[i].t < prio.t)
+			{
+				prio = params.p[i];
+			}
 		}
 	}
 	
@@ -505,7 +505,7 @@ int cycle()
             if(params.a_rdy[i] > 0)
             {
                a = params.a_rdy[i];
-               printf("TA%d : charge = %d\n\n", get_atask_from_num(a)->num, get_atask_from_num(a)->curr_charge);
+               printf("TA%d : temps d'exécution restant = %d\n\n", get_atask_from_num(a)->num, get_atask_from_num(a)->curr_charge);
             }
         }
     }
