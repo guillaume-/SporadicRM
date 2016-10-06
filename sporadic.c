@@ -1,8 +1,6 @@
 /* DESCHASTRES Thomas
  * RIPOLL Guillaume
- * gcc -lm
 */
-#include <math.h> // ceil
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -292,7 +290,7 @@ double iterate_CNS(int i, int k, int m,
 {
 	double d = 0.;
 	for(int j = 0; j<=i; ++j){
-		d += tasks[j].charge * ceil( (m*tasks[k].t) / tasks[j].t);
+		d += tasks[j].charge * ((m * tasks[k].t / tasks[j].t) +1);
 	}
 	d /= (m*tasks[k].t);
 	return d;
@@ -596,6 +594,10 @@ int main(int argc, char *argv[])
     {
         printf("Pas trouvé d'ordonnancement en moins de %d cycles", max_cycles - params.srv.r0);
     }
-
+    
+    free(params.a);
+    free(params.p);
+	free(params.a_rdy);
+	
     return 0;
 }
