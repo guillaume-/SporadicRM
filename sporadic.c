@@ -175,6 +175,65 @@ int chck_charge(bool finish, a_tache task)
 	return 0;
 }
 
+void adjust_params()
+{
+	int periodes[params.p_size];
+	int max_r_zero[params.p_size];
+	
+	for(int i = 0; i < params.p_size; i++)
+	{
+		periodes[i] = 0;
+		max_r_zero[i] = 0;
+	}
+	
+	int cur = 0;
+	
+	//pour chaque tache périodique
+	for(int i = 0; i < params.p_size; i++)
+	{
+		//on va regarder si on a déjà enregistré des tâches ayant cette période
+		for(int j = 0; j < params.p_size; j++)
+		{
+			//si non on l'écrit dans la première case vide qu'on rencontre
+			if(periodes[j] == 0)
+			{
+				periodes[j] = params.p[i].p;
+				cur++;
+				break;
+			}
+			if(periodes[j] == params.p[i].p)
+			{
+				break;
+			}
+		}
+	}
+	
+	//pour chaque période enregistrée
+	for(int i = 0; i < cur; i++)
+	{
+		//on parcoure le tableau des tâches pour trouver le r0 maximum pour une période
+		for(int j = 0; j < params.p_size; j++)
+		{
+			if(params.p[j].p == periodes[i] && params.p[j].r0 > max_r_zero[i])
+			{
+				max_r_zero[i] = params.p[j].r0;
+			}
+		}
+	}
+	
+	//enfin on traverse le tableau des tâches pour mettre toutes les tâches de même période au même r0
+	for(int i = 0; i < cur; i++)
+	{
+		for(int j = 0; j < params.p_size; j++)
+		{
+			if(params.p[j].p == periodes[i])
+			{
+				params.p[j].r0 = max_r_zero[i];
+			}
+		}
+	}
+}
+
 //lit le fichier de configuration et remplit les deux tableaux reçus en paramètre
 void read_conf()
 {
@@ -403,8 +462,6 @@ int get_tache_prio()
 	return -1;
 }
 
-
-
 void task_ready(int num)
 {
 	printf("La tâche apériodique TA%d commence ce cycle \n", num);
@@ -467,7 +524,6 @@ int check_tasks()
 			//alors la tâche récupère sa charge courante
 			int c = cycles_avant_periode(&params.p[i]);
 			
-			printf("c = %d \n", c);
 			if(c == 0 && params.curr_cycle != 0 + params.srv.r0)
 			{
 				//on vérifie que la tâche a bien eu le temps de faire toute son exécution
@@ -602,6 +658,7 @@ int main(int argc, char *argv[])
     params.curr_cycle = params.srv.r0;
 
     read_conf();
+    adjust_params();
 
 	if(CNS(params.p, params.p_size) == -1)
 	{

@@ -1,5 +1,4 @@
 ajouter des dépendances : check ! 
 modifier available() pour ne pas retourner une tâche si la tâche dont elle dépend ne s'est pas encore exécutée : check !
-gérer r0 pour les tâches périodiques : 
-ajuster les paramètres : 
-récupérer toutes les tâches dont dépend une tâche ? : 
+gérer r0 pour les tâches périodiques : check !
+ajuster les paramètres : check !
