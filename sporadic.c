@@ -9,7 +9,16 @@
 #define CONF_ERROR 0
 #define EXEC_ERROR 1
 #define DEFAULT_MAX_CYCLES 50
+#define NB_DEPS 5
+#define NB_RSRC 5
 typedef char bool;
+
+typedef struct
+{
+	int num;
+	int duree;
+	int cycleCalled;
+} RsrcCall;
 
 typedef struct
 {
@@ -18,8 +27,10 @@ typedef struct
 	int charge; //temps d'exécution
 	int p; //période
 	int num; //numéro de la tâche
-	int deps[5];//pour l'instant on dit qu'une tâche ne peut pas avoir plus de 5 dépendances
+	int deps[NB_DEPS];//pour l'instant on dit qu'une tâche ne peut pas avoir plus de 5 dépendances
 	int nb_deps;
+	RsrcCall rsrc[NB_RSRC]; // ressources
+	int nb_rsrc;
 } a_tache, p_tache;
 
 typedef struct
@@ -79,9 +90,9 @@ void usage(char *progname)
 
 void parse_args(char *argv[])
 {
-	params.srv.r0 = sscanf("%d", argv[1]);
-	params.srv.Cs = sscanf("%d", argv[2]);
-	params.srv.Ps = sscanf("%d", argv[3]);
+	params.srv.r0 = (int) strtol(argv[1], (char **)NULL, 10);
+	params.srv.Cs = (int) strtol(argv[2], (char **)NULL, 10);
+	params.srv.Ps = (int) strtol(argv[3], (char **)NULL, 10);
 }
 
 // add an element at the end
@@ -253,7 +264,11 @@ void read_conf()
     params.p = (a_tache*)calloc(taches_p_size, sizeof(p_tache));
     
 	char type = ' ';
-    
+    if(conf == NULL)
+    {
+		perror("ERR");
+		exit(EXIT_FAILURE);
+	}
     while(!feof(conf))
     {
         fscanf(conf, "%s", buffer);
