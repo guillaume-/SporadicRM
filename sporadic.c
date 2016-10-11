@@ -255,16 +255,16 @@ void read_conf()
     params.a_rdy = calloc(num_taches_a, sizeof(int));
 
 //DEBUG
-/*
+
     for(int i = 0; i < num_taches_p; i++)
     {
-        printf("TP%d charge = %d t = %d \n", params.p[i].num, params.p[i].charge, params.p[i].p);
+        printf("TP%d charge = %d p = %d r0 = %d\n", params.p[i].num, params.p[i].charge, params.p[i].p, params.p[i].r0);
     }
     for(int i = 0; i < num_taches_a; i++)
     {
-        printf("TA%d charge = %d t = %d \n", params.a[i].num, params.a[i].charge, params.a[i].p);
+        printf("TA%d charge = %d r0 = %d\n", params.a[i].num, params.a[i].charge, params.a[i].p);
     }
-**/
+
 
     params.a_size = num_taches_a;
     params.p_size = num_taches_p;
@@ -329,7 +329,7 @@ a_tache* get_atask_from_num(int num)
 //une tâche périodique est disponible si elle a encore de la charge à exécuter
 int available(p_tache *p)
 {
-	if(p->curr_charge > 0)
+	if(p->curr_charge > 0 && params.curr_cycle >= p->r0)
 	{
 		if(p->nb_deps > 0)
 		{
@@ -419,31 +419,71 @@ void task_ready(int num)
 	}
 }
 
+//prend en paramètre une tâche p et vérifie si une nouvelle période commence pour cette tâche
+int cycles_avant_periode(p_tache *p)
+{	
+	//si on enlève le r0 du serveur et de la tâche on obtient le numéro 
+	//du cycle pour la tâche qu'on traite
+	int cycle_relatif = params.curr_cycle - params.srv.r0 - p->r0;
+	
+	if(cycle_relatif - p->p < 0)
+	{
+		return -1;
+	}
+	if(cycle_relatif % p->p != 0)
+	{
+		return cycle_relatif % p->p;
+	}
+	
+	return 0;
+}
+
 int check_tasks()
 {
     int i;
+        
+    // on vérifie dans la liste des tâches apériodiques la ou lesquelles
+    // sont supposées commencer lors de ce cycle
+    for(i = 0; i < params.a_size; i++)
+    {
+        if(params.a[i].r0 == params.curr_cycle)
+        {
+            task_ready(params.a[i].num);
+        }
+        else if(params.srv.r0 > params.a[i].r0 && params.srv.r0 == params.curr_cycle)
+        {
+			task_ready(params.a[i].num);
+		}
+    }
+    
 
     //on vérifie pour toutes les tâches périodiques si leur période recommence
     //si c'est le cas on leur rend leur charge totale à exécuter
     for(i = 0; i < params.p_size; i++)
     {
-        //si le cycle courant est un multiple de la période de la tâche courante
-        //alors la tâche récupère sa charge courante
-        if((params.curr_cycle - params.srv.r0) % params.p[i].p == 0  && params.curr_cycle != 0 + params.srv.r0)
-        {
-            //on vérifie que la tâche a bien eu le temps de faire toute son exécution
-            //si c'est pas le cas baaah, c'est une erreur
-            if(params.p[i].curr_charge > 0)
-            {
-                printf("Cycle %d : la tache TP%d a encore %d temps d'exécution à faire cette période\n", params.curr_cycle, params.p[i].num, params.p[i].charge);
-                return 1;
-            }
-            else
-            {
-				printf("La tache TP%d a de nouveau du temps d'exécution à effectuer\n", params.p[i].num);
-                params.p[i].curr_charge = params.p[i].charge;
-            }
-        }
+		if(params.curr_cycle >= params.p[i].r0)
+		{
+			//si le cycle courant est un multiple de la période de la tâche courante
+			//alors la tâche récupère sa charge courante
+			int c = cycles_avant_periode(&params.p[i]);
+			
+			printf("c = %d \n", c);
+			if(c == 0 && params.curr_cycle != 0 + params.srv.r0)
+			{
+				//on vérifie que la tâche a bien eu le temps de faire toute son exécution
+				//si c'est pas le cas baaah, c'est une erreur
+				if(params.p[i].curr_charge > 0)
+				{
+					printf("Cycle %d : la tache TP%d a encore %d temps d'exécution à faire cette période\n", params.curr_cycle, params.p[i].num, params.p[i].charge);
+					return 1;
+				}
+				else
+				{
+					printf("La tache TP%d a de nouveau du temps d'exécution à effectuer\n", params.p[i].num);
+					params.p[i].curr_charge = params.p[i].charge;
+				}
+			}
+		}
     }
  
     //on vérifie si la première tâche apériodique (si elle existe)
@@ -470,21 +510,8 @@ int check_tasks()
         }
     }
 
-    // on vérifie dans la liste des tâches apériodiques la ou lesquelles
-    // sont supposées commencer lors de ce cycle
-    for(i = 0; i < params.a_size; i++)
-    {
-        if(params.a[i].r0 == params.curr_cycle)
-        {
-            task_ready(params.a[i].num);
-        }
-        else if(params.srv.r0 > params.a[i].r0 && params.srv.r0 == params.curr_cycle)
-        {
-			task_ready(params.a[i].num);
-		}
-    }
-    
-    return 0;
+	return 0;
+
 }
 
 int cycle()
