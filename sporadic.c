@@ -15,10 +15,11 @@ typedef char bool;
 
 typedef struct
 {
-	int num;
-	int duree;
-	int cycleCalled;
-} RsrcCall;
+    p_tache *p;
+    ressource *r;
+    int duree;
+    int cycle_appel;
+} utilisation;
 
 typedef struct
 {
@@ -29,7 +30,7 @@ typedef struct
 	int num; //numéro de la tâche
 	int deps[NB_DEPS];//pour l'instant on dit qu'une tâche ne peut pas avoir plus de 5 dépendances
 	int nb_deps;
-	RsrcCall rsrc[NB_RSRC]; // ressources
+	utilisation util_ressources[NB_RSRC]; // ressources
 	int nb_rsrc;
 } a_tache, p_tache;
 
@@ -40,15 +41,29 @@ typedef struct
 	int Ps;
 } Server;
 
+typedef struct
+{
+    int num;
+    p_tache *utilise_par;
+    int utilise;
+} ressource;
+
 typedef struct params_serv
 {
 	a_tache *a;
 	p_tache *p;
 	int a_size;
 	int p_size;
+    
+    int *a_rdy;
+    
 	Server srv;
-	int *a_rdy;
 	int curr_cycle;
+    
+    int nb_ressources;
+    ressource *ressources;
+    
+    int blocage_max;
 } Param;
 
 typedef struct structDelay
@@ -90,9 +105,9 @@ void usage(char *progname)
 
 void parse_args(char *argv[])
 {
-	params.srv.r0 = (int) strtol(argv[1], (char **)NULL, 10);
-	params.srv.Cs = (int) strtol(argv[2], (char **)NULL, 10);
-	params.srv.Ps = (int) strtol(argv[3], (char **)NULL, 10);
+    params.srv.r0 = sscanf("%d", argv[1]);
+    params.srv.Cs = sscanf("%d", argv[2]);
+    params.srv.Ps = sscanf("%d", argv[3]);
 }
 
 // add an element at the end
@@ -243,6 +258,23 @@ void adjust_params()
 			}
 		}
 	}
+}
+
+void acces_ressource(p_tache *p, ressource *r)
+{
+    r->utilise_par = p;
+    r->utilise = 1;
+}
+
+void liberer_ressource(p_tache *p, ressource *r)
+{
+    r->utilise_par = NULL;
+    r->utilise = 0;
+}
+
+void calc_prio_res(p_tache *p, ressource *r)
+{
+    
 }
 
 //lit le fichier de configuration et remplit les deux tableaux reçus en paramètre
@@ -673,6 +705,13 @@ int main(int argc, char *argv[])
     params.curr_cycle = params.srv.r0;
 
     read_conf();
+    
+    if(conf == NULL)
+    {
+        perror("ERR");
+        exit(EXIT_FAILURE);
+    }
+
     adjust_params();
 
 	if(CNS(params.p, params.p_size) == -1)
