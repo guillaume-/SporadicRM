@@ -16,10 +16,12 @@ typedef char bool;
 struct rsrc;
 struct task;
 
+// TODO : 
+// initialize struct util
 typedef struct util
 {
-	struct task *p;
-	struct rsrc *r;
+	struct task *p; /*one to N element(s) */
+	struct rsrc *r; /*one element*/
 	int duree;
 	int cycle_appel;
 } utilisation;
@@ -27,6 +29,7 @@ typedef struct util
 typedef struct rsrc
 {
 	bool is_used;
+	bool is_Periodic; //indicates if a periodic task uses it or if it an aperiodic task
 	struct task *used_by;
 } ressource;
 
@@ -40,7 +43,7 @@ typedef struct task
 	int deps[NB_DEPS];//pour l'instant on dit qu'une tâche ne peut pas avoir plus de 5 dépendances
 	int nb_deps;
 	int nb_rsrc;
-	utilisation util_ressources[NB_RSRC]; // ressources
+	utilisation u_ressources[NB_RSRC]; // ressources
 } a_tache, p_tache;
 
 typedef struct
@@ -438,10 +441,13 @@ int available(p_tache *p)
 
 /* Take a priority task considering RM sporadic, and check rsrc, update the task if needed
  * Detects interblocked by ressource processes
- * returns 1 if periodic, 0 else
 */
-bool get_task_considering_rsrc(struct task **t){
-	return 1;
+void get_task_considering_rsrc(struct task **t){
+	for(int i= 0; i<(*t)->nb_rsrc; ++i)
+	{
+		if( (*t)->u_ressources[i].r->is_used )
+			(*t) = (*t)->u_ressources[i].r->used_by;
+	}
 }
 
 void exec_p(p_tache *p)
@@ -458,11 +464,29 @@ void exec_a(p_tache *a)
 void exec_t(struct task *t)
 {
 	struct task *tRsrc = t;
-	bool periodic = get_task_considering_rsrc(&tRsrc);
+	bool periodic = (tRsrc>=params.p && tRsrc <= &(params.p[params.p_size]) );
 	char letter = periodic ? 'P' : 'A';
+	get_task_considering_rsrc(&tRsrc);
 	if(t != tRsrc)
 	{
 		printf("La priorité des ressources fait executer T%c%d\n", letter, tRsrc->num);
+	}
+	for(int i= 0; i<t->nb_rsrc; ++i){
+		utilisation u = t->u_ressources[i];
+		if(u.cycle_appel == params.curr_cycle)
+		{
+			u.r->is_used = 1;
+			u.r->used_by = t;
+		} // if cumulables
+		if(u.cycle_appel >= params.curr_cycle)
+		{
+			--u.duree;
+			if(u.duree == 0)
+			{
+				u.r->is_used = 0;
+				u.r->used_by = NULL;
+			}
+		}
 	}
 	if(periodic)
 		exec_p(tRsrc);
