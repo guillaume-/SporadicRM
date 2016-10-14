@@ -11,7 +11,28 @@
 #define DEFAULT_MAX_CYCLES 50
 #define NB_DEPS 5
 #define NB_RSRC 5
+
 typedef char bool;
+
+typedef struct util
+{
+	int r0; //cycle de début
+	int curr_charge;
+	int charge; //temps d'exécution
+	int p; //période
+	int num; //numéro de la tâche
+	int deps[NB_DEPS];//pour l'instant on dit qu'une tâche ne peut pas avoir plus de 5 dépendances
+	int nb_deps;
+	int nb_rsrc;
+	struct util *util_ressources; // ressources
+} a_tache, p_tache;
+
+typedef struct
+{
+    int num;
+    p_tache *utilise_par;
+    int utilise;
+} ressource;
 
 typedef struct
 {
@@ -23,30 +44,10 @@ typedef struct
 
 typedef struct
 {
-	int r0; //cycle de début
-	int curr_charge;
-	int charge; //temps d'exécution
-	int p; //période
-	int num; //numéro de la tâche
-	int deps[NB_DEPS];//pour l'instant on dit qu'une tâche ne peut pas avoir plus de 5 dépendances
-	int nb_deps;
-	utilisation util_ressources[NB_RSRC]; // ressources
-	int nb_rsrc;
-} a_tache, p_tache;
-
-typedef struct
-{
 	int r0;
 	int Cs;
 	int Ps;
 } Server;
-
-typedef struct
-{
-    int num;
-    p_tache *utilise_par;
-    int utilise;
-} ressource;
 
 typedef struct params_serv
 {
@@ -405,7 +406,6 @@ char CNS(p_tache *p_tasks, int nb_p_tasks)
 	return -1;
 }
 
-
 p_tache *get_ptask_from_num(int num)
 {
 	for(int i = 0; i < params.p_size; i++)
@@ -706,11 +706,11 @@ int main(int argc, char *argv[])
 
     read_conf();
     
-    if(conf == NULL)
+    /*if(conf == NULL)
     {
         perror("ERR");
         exit(EXIT_FAILURE);
-    }
+    }*/
 
     adjust_params();
 
@@ -745,6 +745,5 @@ int main(int argc, char *argv[])
     free(params.a);
     free(params.p);
 	free(params.a_rdy);
-	
     return 0;
 }
