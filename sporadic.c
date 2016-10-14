@@ -13,23 +13,21 @@
 #define NB_RSRC 5
 
 typedef char bool;
-
 struct rsrc;
 struct task;
 
 typedef struct util
 {
-    struct task *p;
-    struct rsrc *r;
-    int duree;
-    int cycle_appel;
+	struct task *p;
+	struct rsrc *r;
+	int duree;
+	int cycle_appel;
 } utilisation;
 
 typedef struct rsrc
 {
-    int num;
-    int utilise;
-    struct task *utilise_par;
+	bool is_used;
+	struct task *used_by;
 } ressource;
 
 typedef struct task
@@ -58,16 +56,12 @@ typedef struct params_serv
 	p_tache *p;
 	int a_size;
 	int p_size;
-    
-    int *a_rdy;
-    
-	Server srv;
+	int *a_rdy; // ready to execute <=> not yet executed
 	int curr_cycle;
-    
-    int nb_ressources;
-    ressource *ressources;
-    
-    int blocage_max;
+	int nb_ressources;
+	int blocage_max;
+	Server srv;
+	ressource ressources[NB_RSRC];
 } Param;
 
 typedef struct structDelay
@@ -109,9 +103,9 @@ void usage(char *progname)
 
 void parse_args(char *argv[])
 {
-    params.srv.r0 = sscanf("%d", argv[1]);
-    params.srv.Cs = sscanf("%d", argv[2]);
-    params.srv.Ps = sscanf("%d", argv[3]);
+	params.srv.r0 = sscanf("%d", argv[1]);
+	params.srv.Cs = sscanf("%d", argv[2]);
+	params.srv.Ps = sscanf("%d", argv[3]);
 }
 
 // add an element at the end
@@ -173,9 +167,9 @@ int D_update(Delays *list, int delay_reduce)
 }
 
 /* Une tâche apériodique a la priorité du serveur.
- * La charge du serveur diminue au lancement d'une tâche apériodique de sa charge, mais augmente après ce lancement avec un délai de serveur.periode cycles
+ * La charge du serveur diminue au lancement d'une tâche apériodique de sa charge,
+ * mais augmente après ce lancement avec un délai de serveur.periode cycles
  * A n'appeler que lors du lancement d'une tâche apériodique
- * Code à include dans cycle
 */
 int chck_charge(bool finish, a_tache task)
 {
@@ -237,7 +231,7 @@ void adjust_params()
 			}
 		}
 	}
-	
+
 	//pour chaque période enregistrée
 	for(int i = 0; i < cur; i++)
 	{
@@ -250,7 +244,7 @@ void adjust_params()
 			}
 		}
 	}
-	
+
 	//enfin on traverse le tableau des tâches pour mettre toutes les tâches de même période au même r0
 	for(int i = 0; i < cur; i++)
 	{
@@ -266,48 +260,40 @@ void adjust_params()
 
 void acces_ressource(p_tache *p, ressource *r)
 {
-    r->utilise_par = p;
-    r->utilise = 1;
+	r->used_by = p;
+	r->is_used = 1;
 }
 
 void liberer_ressource(p_tache *p, ressource *r)
 {
-    r->utilise_par = NULL;
-    r->utilise = 0;
-}
-
-void calc_prio_res(p_tache *p, ressource *r)
-{
-    
+	r->used_by = NULL;
+	r->is_used = 0;
 }
 
 //lit le fichier de configuration et remplit les deux tableaux reçus en paramètre
 void read_conf()
 {
-    FILE *conf;
-    conf = fopen(FICHIER_CONF, "r+");
-
-    char buffer[64];
-
-    int taches_a_size = 5;
-    int taches_p_size = 5;
-
-    //ces deux indices servent à retenir combien de tâches sont déjà présentes dans le tableau
-    int num_taches_a = 0;
-    int num_taches_p = 0;
-
-    params.a = (a_tache*)calloc(taches_a_size, sizeof(a_tache));
-    params.p = (a_tache*)calloc(taches_p_size, sizeof(p_tache));
-    
+	FILE *conf;
+	conf = fopen(FICHIER_CONF, "r+");
+	char buffer[64];
+	int taches_a_size = 5;
+	int taches_p_size = 5;
+	//ces deux indices servent à retenir combien de tâches sont déjà présentes dans le tableau
+	int num_taches_a = 0;
+	int num_taches_p = 0;
 	char type = ' ';
-    if(conf == NULL)
-    {
+
+	params.a = (a_tache*)calloc(taches_a_size, sizeof(a_tache));
+	params.p = (a_tache*)calloc(taches_p_size, sizeof(p_tache));
+
+	if(conf == NULL)
+	{
 		perror("ERR");
 		exit(EXIT_FAILURE);
 	}
-    while(!feof(conf))
-    {
-        fscanf(conf, "%s", buffer);
+	while(!feof(conf))
+	{
+		fscanf(conf, "%s", buffer);
 
 		if(buffer[0] == 0)
 		{
@@ -335,7 +321,7 @@ void read_conf()
 						for(int i = 0; i < nb_deps; i++)
 						{
 							//TPnum={charge,période,r0}[TPX,TPY...]
-							//^buffer            posdep^  ^ posnum
+							//^buffer			posdep^  ^ posnum
 							char* posnum = buffer + posdep + 1 + 4 * i;
 							sscanf(posnum, "TP%d", &p->deps[i]);
 							p->nb_deps = nb_deps;
@@ -359,34 +345,27 @@ void read_conf()
 				}
 			}			
 		}
-    }
-
-    
-    params.a_rdy = calloc(num_taches_a, sizeof(int));
+	}
+	params.a_rdy = calloc(num_taches_a, sizeof(int));
 
 //DEBUG
-
-    for(int i = 0; i < num_taches_p; i++)
-    {
-        printf("TP%d charge = %d p = %d r0 = %d\n", params.p[i].num, params.p[i].charge, params.p[i].p, params.p[i].r0);
-    }
-    for(int i = 0; i < num_taches_a; i++)
-    {
-        printf("TA%d charge = %d r0 = %d\n", params.a[i].num, params.a[i].charge, params.a[i].p);
-    }
-
-
-    params.a_size = num_taches_a;
-    params.p_size = num_taches_p;
-
-    fclose(conf);
+	for(int i = 0; i < num_taches_p; i++)
+	{
+		printf("TP%d charge = %d p = %d r0 = %d\n", params.p[i].num, params.p[i].charge, params.p[i].p, params.p[i].r0);
+	}
+	for(int i = 0; i < num_taches_a; i++)
+	{
+		printf("TA%d charge = %d r0 = %d\n", params.a[i].num, params.a[i].charge, params.a[i].p);
+	}
+	params.a_size = num_taches_a;
+	params.p_size = num_taches_p;
+	fclose(conf);
 }
 
 /* iterate_CNS
  * calcule une itération du théorème de Lehoczky et al.
 */
-double iterate_CNS(int i, int k, int m, 
-				   p_tache *tasks, int nb_tasks)
+double iterate_CNS(int i, int k, int m, p_tache *tasks, int nb_tasks)
 {
 	double d = 0.;
 	for(int j = 0; j <= i; ++j){
@@ -418,7 +397,6 @@ p_tache *get_ptask_from_num(int num)
 			return &params.p[i];
 		}
 	}
-	
 	return 0;
 }
 
@@ -431,7 +409,6 @@ a_tache* get_atask_from_num(int num)
 			return &params.a[i];
 		}
 	}
-	
 	return 0;
 }
 
@@ -443,7 +420,6 @@ int available(p_tache *p)
 		if(p->nb_deps > 0)
 		{
 			p_tache *dep;
-			
 			for(int i = 0; i < p->nb_deps; i++)
 			{
 				dep = get_ptask_from_num(p->deps[i]);
@@ -460,16 +436,38 @@ int available(p_tache *p)
 	return 0;
 }
 
-void exec_p(p_tache *p)
-{
-    p->curr_charge--;
+/* Take a priority task considering RM sporadic, and check rsrc, update the task if needed
+ * Detects interblocked by ressource processes
+ * returns 1 if periodic, 0 else
+*/
+bool get_task_considering_rsrc(struct task **t){
+	return 1;
 }
 
-void exec_a()
+void exec_p(p_tache *p)
 {
-    a_tache* tache = get_atask_from_num(params.a_rdy[0]);
-    tache->curr_charge--;
-    chck_charge(0, *tache);
+	p->curr_charge--;
+}
+
+void exec_a(p_tache *a)
+{
+	a->curr_charge--;
+	chck_charge(0, *a);
+}
+
+void exec_t(struct task *t)
+{
+	struct task *tRsrc = t;
+	bool periodic = get_task_considering_rsrc(&tRsrc);
+	char letter = periodic ? 'P' : 'A';
+	if(t != tRsrc)
+	{
+		printf("La priorité des ressources fait executer T%c%d\n", letter, tRsrc->num);
+	}
+	if(periodic)
+		exec_p(tRsrc);
+	else
+		exec_a(tRsrc);
 }
 
 int get_tache_prio()
@@ -479,7 +477,6 @@ int get_tache_prio()
 		 */
 	int i;
 	p_tache prio;
-
 	int found = 0;
 
 	for(i = 0; i < params.p_size; i++)
@@ -503,7 +500,6 @@ int get_tache_prio()
 			}
 		}
 	}
-	
 	//si on a trouvé une tâche disponible on la renvoie
 	if(found)
 	{
@@ -512,6 +508,7 @@ int get_tache_prio()
 	return -1;
 }
 
+/* Called for aperiodic tasks with a num task as parameter */
 void task_ready(int num)
 {
 	printf("La tâche apériodique TA%d commence ce cycle \n", num);
@@ -532,7 +529,7 @@ int cycles_avant_periode(p_tache *p)
 	//si on enlève le r0 du serveur et de la tâche on obtient le numéro 
 	//du cycle pour la tâche qu'on traite
 	int cycle_relatif = params.curr_cycle - params.srv.r0 - p->r0;
-	
+
 	if(cycle_relatif - p->p < 0)
 	{
 		return -1;
@@ -541,33 +538,31 @@ int cycles_avant_periode(p_tache *p)
 	{
 		return cycle_relatif % p->p;
 	}
-	
 	return 0;
 }
 
 int check_tasks()
 {
-    int i;
-        
-    // on vérifie dans la liste des tâches apériodiques la ou lesquelles
-    // sont supposées commencer lors de ce cycle
-    for(i = 0; i < params.a_size; i++)
-    {
-        if(params.a[i].r0 == params.curr_cycle)
-        {
-            task_ready(params.a[i].num);
-        }
-        else if(params.srv.r0 > params.a[i].r0 && params.srv.r0 == params.curr_cycle)
-        {
+	int i;
+		
+	// on vérifie dans la liste des tâches apériodiques la ou lesquelles
+	// sont supposées commencer lors de ce cycle
+	for(i = 0; i < params.a_size; i++)
+	{
+		if(params.a[i].r0 == params.curr_cycle)
+		{
 			task_ready(params.a[i].num);
 		}
-    }
-    
+		else if(params.srv.r0 > params.a[i].r0 && params.srv.r0 == params.curr_cycle)
+		{
+			task_ready(params.a[i].num);
+		}
+	}
 
-    //on vérifie pour toutes les tâches périodiques si leur période recommence
-    //si c'est le cas on leur rend leur charge totale à exécuter
-    for(i = 0; i < params.p_size; i++)
-    {
+	//on vérifie pour toutes les tâches périodiques si leur période recommence
+	//si c'est le cas on leur rend leur charge totale à exécuter
+	for(i = 0; i < params.p_size; i++)
+	{
 		if(params.curr_cycle >= params.p[i].r0)
 		{
 			//si le cycle courant est un multiple de la période de la tâche courante
@@ -590,66 +585,64 @@ int check_tasks()
 				}
 			}
 		}
-    }
- 
-    //on vérifie si la première tâche apériodique (si elle existe)
-    //de la liste des a_taches prêtes a encore de la charge à exécuter
-    if(params.a_rdy[0] != 0)
-    {
-        //sinon on la sort de la file
-        if(get_atask_from_num(params.a_rdy[0])->curr_charge == 0)
-        {
-            params.a_rdy[0] = 0;
+	}
+
+	//on vérifie si la première tâche apériodique (si elle existe)
+	//de la liste des a_taches prêtes a encore de la charge à exécuter
+	if(params.a_rdy[0] != 0)
+	{
+		//sinon on la sort de la file
+		if(get_atask_from_num(params.a_rdy[0])->curr_charge == 0)
+		{
+			params.a_rdy[0] = 0;
 			
-            //on parcours la liste des tâches apériodiques prêtes à être exécutées
-            //et on bouge chacune d'elles à la case d'avant (on fait défiler quoi)
-            for(i = 1; i < params.a_size; i++)
-            {
-                //si on est arrivé au bout de la file on sort
-                if(params.a_rdy[i] == 0)
-                {
-                    break;
-                }
-                params.a_rdy[i - 1] = params.a_rdy[i];
-                params.a_rdy[i] = 0;
-            }
-        }
-    }
-
+			//on parcours la liste des tâches apériodiques prêtes à être exécutées
+			//et on bouge chacune d'elles à la case d'avant (on fait défiler quoi)
+			for(i = 1; i < params.a_size; i++)
+			{
+				//si on est arrivé au bout de la file on sort
+				if(params.a_rdy[i] == 0)
+				{
+					break;
+				}
+				params.a_rdy[i - 1] = params.a_rdy[i];
+				params.a_rdy[i] = 0;
+			}
+		}
+	}
 	return 0;
-
 }
 
 int cycle()
 {
-    if(check_tasks())
-    {
+	if(check_tasks())
+	{
 		printf("Impossible d'effectuer un ordonnancement correct \n");
 		return -1;
 	}
 
-    //on regarde si on a une tache périodique à lancer
-    int p_prio = get_tache_prio();
+	//on regarde si on a une tache périodique à lancer
+	int p_prio = get_tache_prio();
 
-    if(params.a_rdy[0] > 0)
-    {
-        printf("\nLes tâches aperiodiques attendant d'être exécutées sont : \n");
-        int a = 0;			
+	if(params.a_rdy[0] > 0)
+	{
+		printf("\nLes tâches aperiodiques attendant d'être exécutées sont : \n");
+		int a = 0;
 
-        for(int i = 0; i < params.a_size; i++)
-        {
-            if(params.a_rdy[i] > 0)
-            {
-               a = params.a_rdy[i];
-               printf("TA%d : temps d'exécution restant = %d\n\n", get_atask_from_num(a)->num, get_atask_from_num(a)->curr_charge);
-            }
-        }
-    }
+		for(int i = 0; i < params.a_size; i++)
+		{
+			if(params.a_rdy[i] > 0)
+			{
+			   a = params.a_rdy[i];
+			   printf("TA%d : temps d'exécution restant = %d\n\n", get_atask_from_num(a)->num, get_atask_from_num(a)->curr_charge);
+			}
+		}
+	}
 
-    //si c'est le cas on vérifie que sa priorité est effectivement plus grande que celle du serveur
-    if(p_prio != -1)
-    {
-        p_tache *prio = get_ptask_from_num(p_prio);
+	//si c'est le cas on vérifie que sa priorité est effectivement plus grande que celle du serveur
+	if(p_prio != -1)
+	{
+		p_tache *prio = get_ptask_from_num(p_prio);
 		
 		if(!prio)
 		{
@@ -665,57 +658,57 @@ int cycle()
 			if((prio->p > params.srv.Ps) && a->curr_charge > 0)
 			{
 				printf("Le serveur a la priorité ce cycle donc on exécute la tâche apériodique TA%d à qui il reste %d à exécuter \n", a->num, a->curr_charge);
-				exec_a();
+				exec_t(get_atask_from_num(params.a_rdy[0]));
 			}
 			else
 			{
 				printf("\nLe serveur n'a pas la priorité, on éxécute TP%d\n", prio->num);
-				exec_p(prio);
+				exec_t(prio);
 			}
 		}
-        //sinon on lance la tâche périodique
-        else
-        {
-            printf("\nLe serveur n'a pas de tâche apériodique à exécuter : on exécute TP%d\n", prio->num);
+		//sinon on lance la tâche périodique
+		else
+		{
+			printf("\nLe serveur n'a pas de tâche apériodique à exécuter : on exécute TP%d\n", prio->num);
 
-            exec_p(prio);
-        }
-    }
-    else if(params.a_rdy[0] > 0 && get_atask_from_num(params.a_rdy[0])->curr_charge > 0 )
-    {
+			exec_t(prio);
+		}
+	}
+	else if(params.a_rdy[0] > 0 && get_atask_from_num(params.a_rdy[0])->curr_charge > 0 )
+	{
 		printf("Pas de tâche périodique à exécuter : le serveur exécute TA%d\n", get_atask_from_num(params.a_rdy[0])->num);
-        exec_a();
-    }
-    else
-    {
-        printf("Rien à faire ce cycle\n");
-        printf("Ordonnancement trouvé en %d cycles\n ", params.curr_cycle - 1 - params.srv.r0);
-        
-        return 1;
-    }
-    
-    return 0;
+		exec_t(get_atask_from_num(params.a_rdy[0]));
+	}
+	else
+	{
+		printf("Rien à faire ce cycle\n");
+		printf("Ordonnancement trouvé en %d cycles\n ", params.curr_cycle - 1 - params.srv.r0);
+		
+		return 1;
+	}
+	
+	return 0;
 }
 
 int main(int argc, char *argv[])
 {
-    if(argc != 4)
-    {
-        usage(argv[0]);
-    }
-    parse_args(argv);
-    
-    params.curr_cycle = params.srv.r0;
+	if(argc != 4)
+	{
+		usage(argv[0]);
+	}
+	parse_args(argv);
+	
+	params.curr_cycle = params.srv.r0;
 
-    read_conf();
-    
-    /*if(conf == NULL)
-    {
-        perror("ERR");
-        exit(EXIT_FAILURE);
-    }*/
+	read_conf();
+	
+	/*if(conf == NULL)
+	{
+		perror("ERR");
+		exit(EXIT_FAILURE);
+	}*/
 
-    adjust_params();
+	adjust_params();
 
 	if(CNS(params.p, params.p_size) == -1)
 	{
@@ -727,26 +720,26 @@ int main(int argc, char *argv[])
 		printf("CNS vérifiée : ordonnançable.\n");
 	}
 
-    int success = 0;
+	int success = 0;
 
-    while(!success && params.curr_cycle < max_cycles)
-    {
-        printf("\n\n----------CYCLE NUMERO %d---------- \n\n", params.curr_cycle);
-        success = cycle();
-        params.curr_cycle++;
-    }
+	while(!success && params.curr_cycle < max_cycles)
+	{
+		printf("\n\n----------CYCLE NUMERO %d---------- \n\n", params.curr_cycle);
+		success = cycle();
+		params.curr_cycle++;
+	}
 
-    if(!success)
-    {
-        printf("Pas trouvé d'ordonnancement en moins de %d cycles", max_cycles - params.srv.r0);
-    }
-    if(success == -1)
-    {
+	if(!success)
+	{
+		printf("Pas trouvé d'ordonnancement en moins de %d cycles", max_cycles - params.srv.r0);
+	}
+	if(success == -1)
+	{
 		printf("Erreur d'exécution, arrêt du programme.\n");
 	}
-    
-    free(params.a);
-    free(params.p);
+
+	free(params.a);
+	free(params.p);
 	free(params.a_rdy);
-    return 0;
+	return 0;
 }
