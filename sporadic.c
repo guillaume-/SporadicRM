@@ -14,7 +14,25 @@
 
 typedef char bool;
 
+struct rsrc;
+struct task;
+
 typedef struct util
+{
+    struct task *p;
+    struct rsrc *r;
+    int duree;
+    int cycle_appel;
+} utilisation;
+
+typedef struct rsrc
+{
+    int num;
+    int utilise;
+    struct task *utilise_par;
+} ressource;
+
+typedef struct task
 {
 	int r0; //cycle de début
 	int curr_charge;
@@ -24,23 +42,8 @@ typedef struct util
 	int deps[NB_DEPS];//pour l'instant on dit qu'une tâche ne peut pas avoir plus de 5 dépendances
 	int nb_deps;
 	int nb_rsrc;
-	struct util *util_ressources; // ressources
+	utilisation util_ressources[NB_RSRC]; // ressources
 } a_tache, p_tache;
-
-typedef struct
-{
-    int num;
-    p_tache *utilise_par;
-    int utilise;
-} ressource;
-
-typedef struct
-{
-    p_tache *p;
-    ressource *r;
-    int duree;
-    int cycle_appel;
-} utilisation;
 
 typedef struct
 {
