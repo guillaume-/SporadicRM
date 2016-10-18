@@ -6,31 +6,32 @@
 #include <string.h>
 
 #define FICHIER_CONF "conf_sporadic"
+#define FICHIER_RSRC "conf_ressources"
 #define CONF_ERROR 0
 #define EXEC_ERROR 1
 #define DEFAULT_MAX_CYCLES 50
 #define NB_DEPS 5
-#define NB_RSRC 5
+#define NB_MAX_RSRC 5
 
 typedef char bool;
 struct rsrc;
 struct task;
 
-// TODO : 
-// initialize struct util
+// one per couple (task, ressource)
 typedef struct util
 {
-	struct task *p; /*one to N element(s) */
-	struct rsrc *r; /*one element*/
+	struct task *t;
+	struct rsrc *r;
 	int duree;
 	int cycle_appel;
 } utilisation;
 
 typedef struct rsrc
 {
+	int num;
 	bool is_used;
 	bool is_Periodic; //indicates if a periodic task uses it or if it an aperiodic task
-	struct task *used_by;
+	struct task *used_by; /* one element */
 } ressource;
 
 typedef struct task
@@ -43,7 +44,7 @@ typedef struct task
 	int deps[NB_DEPS];//pour l'instant on dit qu'une tâche ne peut pas avoir plus de 5 dépendances
 	int nb_deps;
 	int nb_rsrc;
-	utilisation u_ressources[NB_RSRC]; // ressources
+	utilisation u_ressources[NB_MAX_RSRC]; // ressources
 } a_tache, p_tache;
 
 typedef struct
@@ -61,10 +62,10 @@ typedef struct params_serv
 	int p_size;
 	int *a_rdy; // ready to execute <=> not yet executed
 	int curr_cycle;
-	int nb_ressources;
 	int blocage_max;
 	Server srv;
-	ressource ressources[NB_RSRC];
+	int nbR;
+	ressource *R[NB_MAX_RSRC]; //used for know what to free
 } Param;
 
 typedef struct structDelay
@@ -106,9 +107,10 @@ void usage(char *progname)
 
 void parse_args(char *argv[])
 {
-	params.srv.r0 = sscanf("%d", argv[1]);
-	params.srv.Cs = sscanf("%d", argv[2]);
-	params.srv.Ps = sscanf("%d", argv[3]);
+	// Reason no sscanf : warning: format not a string literal and no format arguments [-Wformat-security]
+	params.srv.r0 = (int) strtol(argv[1], (char **)NULL, 10);
+	params.srv.Cs = (int) strtol(argv[2], (char **)NULL, 10);
+	params.srv.Ps = (int) strtol(argv[3], (char **)NULL, 10);
 }
 
 // add an element at the end
@@ -285,10 +287,8 @@ void read_conf()
 	int num_taches_a = 0;
 	int num_taches_p = 0;
 	char type = ' ';
-
 	params.a = (a_tache*)calloc(taches_a_size, sizeof(a_tache));
 	params.p = (a_tache*)calloc(taches_p_size, sizeof(p_tache));
-
 	if(conf == NULL)
 	{
 		perror("ERR");
@@ -297,7 +297,6 @@ void read_conf()
 	while(!feof(conf))
 	{
 		fscanf(conf, "%s", buffer);
-
 		if(buffer[0] == 0)
 		{
 			break;
@@ -310,12 +309,10 @@ void read_conf()
 				{
 					int posdep = 0;
 					p_tache *p = &(params.p[num_taches_p]);
-					
 					//scanne la string et met directement les paramètres dans la tâche
 					sscanf(buffer, "TP%d={%d,%d,%d}%n", &p->num, &p->charge, &p->p, &p->r0, &posdep);
-					
 					p->curr_charge = p->charge;
-					
+					p->nb_rsrc = 0;
 					//ici on parcoure les dépendances et on remplit le tableau de dépendances de la tâche
 					if(buffer[posdep] == '[')
 					{
@@ -330,16 +327,14 @@ void read_conf()
 							p->nb_deps = nb_deps;
 						}
 					}
-					
 					num_taches_p++;
 				}
 				else if(type == 'A')
 				{
 					a_tache *a = &params.a[num_taches_a];
 					sscanf(buffer, "TA%d={%d,%d,%d}", &a->num, &a->charge, &a->p, &a->r0);
-					
 					a->curr_charge = a->charge;
-					
+					a->nb_rsrc = 0;
 					num_taches_a++;
 				}
 				else
@@ -350,7 +345,6 @@ void read_conf()
 		}
 	}
 	params.a_rdy = calloc(num_taches_a, sizeof(int));
-
 //DEBUG
 	for(int i = 0; i < num_taches_p; i++)
 	{
@@ -363,6 +357,125 @@ void read_conf()
 	params.a_size = num_taches_a;
 	params.p_size = num_taches_p;
 	fclose(conf);
+}
+
+/* Takes a string as from
+ * and places int to toInt
+ * return the position of the string after parsing the int
+ * */
+char *cpyInt(char *from, char **toInt){
+	int i = 0,
+		j = 0;
+	// Skip what is'nt compatible with int
+	while((from[i] != '-') && (from[i]<'0' || from[i]>'9'))
+	{
+		if(from[i] == '\n' || from[i] == '\r' || from[i] == '\0' || from[i] == 0)
+			return NULL;
+		++i;
+	}
+	// Read the potential negative caracter
+	if(from[i]=='-')
+	{
+		(*(toInt))[j] = '-';
+		++i;
+		++j;
+	}
+	// Read all numerical caracters
+	while(from[i] >= '0' && from[i] <= '9')
+	{
+		(*(toInt))[j] = from[i];
+		++i;
+		++j;
+	}
+	// End
+	(*(toInt))[j] = '\0';
+	return &(from[i]);
+}
+
+/* Gestion Ressource niveau params, champs ressource */
+ressource *RinParams(int idR, bool isPeriodic){
+	ressource *r;
+	for(int i=0; i<params.nbR; ++i)
+		if(params.R[i]->num == idR)
+			return params.R[i];
+	r = (ressource*) malloc(sizeof(ressource));
+	r->num = idR;
+	r->is_used = 0;
+	r->used_by = NULL;
+	r->is_Periodic = isPeriodic;
+	params.R[params.nbR] = r;
+	++params.nbR;
+	return r;
+}
+
+/* Gestion Ressource niveau task, champs utilisation */
+void fill_util(int idT, char periodic, int duree, int cycle_call, int idR){
+	struct util *u;
+	struct task *t;
+	if(periodic=='P')
+	{
+		for(int i=0; i<params.p_size; ++i)
+			if(params.p[i].num == idT)
+			{
+				t = &(params.p[i]);
+				break;
+			}
+	}
+	else
+	{
+		for(int i=0; i<params.a_size; ++i)
+			if(params.a[i].num == idT)
+			{
+				t = &(params.a[i]);
+				break;
+			}
+	}
+	u = &(t->u_ressources[t->nb_rsrc]);
+	u->duree = duree;
+	u->cycle_appel = cycle_call;
+	u->t = t;
+	u->r = RinParams(idR, periodic=='P');
+	++t->nb_rsrc;
+	printf("Ressource %d ajoutée dans la tâche T%c%d(cycle=%d, duree=%d)\n", idR, periodic, idT, cycle_call, duree);
+}
+
+// Charge du fichier de ressources le champs rsrc de chaque tâche chargées dans la variables globale params
+// MAJ params.a.u_ressources
+// MAJ params.a.nb_rsrc
+// MAJ params.p.u_ressources
+// MAJ params.p.nb_rsrc
+void read_ressources(){
+	FILE *conf = fopen(FICHIER_RSRC, "r+");
+	char *buffer = NULL;
+	long unsigned int maxLineSize = 0;
+	char *reading,
+		 *getInt = malloc(11*sizeof(char)),
+		 is_periodic; // 11 caractères en pire cas -2 000 000 000
+	int nbR = 0, nbT = 0,
+		idR, idT,
+		cycleLock, dureeLock;
+	params.nbR = 0;
+	while(getline(&buffer, &maxLineSize, conf) != -1)
+		if(buffer[0]=='R')
+		{
+			// Format analysé : R1=[TP1(1, 1); TP2(2, 2)]
+			reading = cpyInt(&(buffer[1]), &getInt);
+			idR = (int) strtol(getInt, (char **)NULL, 10);
+			for(; *reading != ']'; ++reading)
+				if(*reading=='A' || *reading=='P')
+				{
+					is_periodic = *reading;
+					reading = cpyInt(reading,  &getInt);
+					idT = (int) strtol(getInt, (char **)NULL, 10);
+					reading = cpyInt(reading,  &getInt);
+					cycleLock = (int) strtol(getInt, (char **)NULL, 10);
+					reading = cpyInt(reading,  &getInt);
+					dureeLock = (int) strtol(getInt, (char **)NULL, 10);
+					fill_util(idT, is_periodic, dureeLock, cycleLock, idR);
+				}
+			++nbR;
+		}
+	free(buffer);
 }
 
 /* iterate_CNS
@@ -403,7 +516,7 @@ p_tache *get_ptask_from_num(int num)
 	return 0;
 }
 
-a_tache* get_atask_from_num(int num)
+a_tache *get_atask_from_num(int num)
 {
 	for(int i = 0; i < params.a_size; i++)
 	{
@@ -426,7 +539,6 @@ int available(p_tache *p)
 			for(int i = 0; i < p->nb_deps; i++)
 			{
 				dep = get_ptask_from_num(p->deps[i]);
-				
 				if(dep->curr_charge > 0)
 				{
 					printf("TP%d ne peut pas s'exécuter car elle dépend de TP%d\n", p->num, dep->num);
@@ -439,15 +551,27 @@ int available(p_tache *p)
 	return 0;
 }
 
+bool is_T_Periodic(struct task *t){
+	return (t>=params.p && t<=&(params.p[params.p_size]));
+}
+
 /* Take a priority task considering RM sporadic, and check rsrc, update the task if needed
  * Detects interblocked by ressource processes
 */
 void get_task_considering_rsrc(struct task **t){
+	struct task *tmp = *t;
+	char c;
 	for(int i= 0; i<(*t)->nb_rsrc; ++i)
 	{
-		if( (*t)->u_ressources[i].r->is_used )
-			(*t) = (*t)->u_ressources[i].r->used_by;
+		utilisation *u = &((*t)->u_ressources[i]);
+		if( u->r->is_used && (u->r->used_by != *t))
+		{
+			(*t) = u->r->used_by;
+			c = is_T_Periodic(u->r->used_by) ? 'P' : 'A';
+			printf("Conflit sur R%d, exécution passée prioritaire de : T%c%d\n", u->r->used_by->num, c, u->r->used_by->num);
+		}
 	}
+	// On suppose que le graphe ne boucle pas
 }
 
 void exec_p(p_tache *p)
@@ -463,35 +587,35 @@ void exec_a(p_tache *a)
 
 void exec_t(struct task *t)
 {
-	struct task *tRsrc = t;
-	bool periodic = (tRsrc>=params.p && tRsrc <= &(params.p[params.p_size]) );
+	bool periodic = is_T_Periodic(t);
 	char letter = periodic ? 'P' : 'A';
-	get_task_considering_rsrc(&tRsrc);
-	if(t != tRsrc)
+	get_task_considering_rsrc(&t);
+	printf("Tâche T%c%d : début du parcours des ressources\n", letter, t->num);
+	for(int i=0; i<t->nb_rsrc; ++i)
 	{
-		printf("La priorité des ressources fait executer T%c%d\n", letter, tRsrc->num);
-	}
-	for(int i= 0; i<t->nb_rsrc; ++i){
-		utilisation u = t->u_ressources[i];
-		if(u.cycle_appel == params.curr_cycle)
+		utilisation *u = &(t->u_ressources[i]);
+		printf("La tâche T%c%d utilise la ressource R%d\n", letter, t->num, u->r->num);
+		if(u->cycle_appel <= params.curr_cycle)
 		{
-			u.r->is_used = 1;
-			u.r->used_by = t;
+			u->r->is_used = 1;
+			u->r->used_by = t;
 		} // if cumulables
-		if(u.cycle_appel >= params.curr_cycle)
+		if(u->r->used_by == t)
 		{
-			--u.duree;
-			if(u.duree == 0)
+			--u->duree;
+			if(u->duree == 0)
 			{
-				u.r->is_used = 0;
-				u.r->used_by = NULL;
+				printf("La tâche T%c%d libère la ressource R%d\n", letter, t->num, u->r->num);
+				u->r->is_used = 0;
+				u->r->used_by = NULL;
 			}
 		}
 	}
+	printf("Tâche T%c%d : fin du parcours des ressources\n", letter, t->num);
 	if(periodic)
-		exec_p(tRsrc);
+		exec_p(t);
 	else
-		exec_a(tRsrc);
+		exec_a(t);
 }
 
 int get_tache_prio()
@@ -506,7 +630,6 @@ int get_tache_prio()
 	for(i = 0; i < params.p_size; i++)
 	{
 		printf("La tâche TP%d doit encore s'exécuter %d cycles cette période (P = %d)\n", params.p[i].num, params.p[i].curr_charge, params.p[i].p);
-		
 		//il faut bien sûr que la tâche n'ait pas encore été exécutée pendant cette période
 		if(available(&(params.p[i])))
 		{			
@@ -716,43 +839,32 @@ int cycle()
 
 int main(int argc, char *argv[])
 {
+	int success;
 	if(argc != 4)
 	{
 		usage(argv[0]);
 	}
 	parse_args(argv);
-	
 	params.curr_cycle = params.srv.r0;
-
 	read_conf();
-	
-	/*if(conf == NULL)
-	{
-		perror("ERR");
-		exit(EXIT_FAILURE);
-	}*/
-
 	adjust_params();
+	read_ressources();
 
 	if(CNS(params.p, params.p_size) == -1)
 	{
 		printf("Non ordonnançable.\n");
-		//return 1;
+		return -1;
 	}
 	else
-	{
 		printf("CNS vérifiée : ordonnançable.\n");
-	}
 
-	int success = 0;
-
+	success = 0;
 	while(!success && params.curr_cycle < max_cycles)
 	{
 		printf("\n\n----------CYCLE NUMERO %d---------- \n\n", params.curr_cycle);
 		success = cycle();
 		params.curr_cycle++;
 	}
-
 	if(!success)
 	{
 		printf("Pas trouvé d'ordonnancement en moins de %d cycles", max_cycles - params.srv.r0);
@@ -762,6 +874,8 @@ int main(int argc, char *argv[])
 		printf("Erreur d'exécution, arrêt du programme.\n");
 	}
 
+	for(int i = 0; i<params.nbR; ++i)
+		free(params.R[i]);
 	free(params.a);
 	free(params.p);
 	free(params.a_rdy);
